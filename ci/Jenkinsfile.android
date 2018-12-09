@@ -1,5 +1,15 @@
 pipeline {
-  agent { label 'linux' }
+  agent { 
+    docker {
+      label 'linux'
+      image 'statusteam/status-build-android:1.0.0'
+      args (
+        "--tmpfs /var/tmp/yarn:rw,size=1G,exec,mode=1777 "+
+        "-v /var/tmp/gradle:/var/tmp/gradle:rw "+
+        "-v /home/jenkins/status-im.keystore:/tmp/status-im.keystore:ro"
+      )
+    }
+  }
 
   options {
     timestamps()
@@ -24,16 +34,20 @@ pipeline {
 
   environment {
     BUILD_PLATFORM = 'android'
-    LANG = 'en_US.UTF-8'
+    STATUS_RELEASE_STORE_FILE = '/tmp/status-im.keystore'
+    LANG     = 'en_US.UTF-8'
     LANGUAGE = 'en_US.UTF-8'
-    LC_ALL = 'en_US.UTF-8'
+    LC_ALL   = 'en_US.UTF-8'
     FASTLANE_DISABLE_COLORS = 1
     REALM_DISABLE_ANALYTICS = 1
-    BUNDLE_PATH = "${HOME}/.bundle"
-    ANDROID_HOME = '/usr/lib/android-sdk'
-    ANDROID_SDK_ROOT = '/usr/lib/android-sdk'
-    ANDROID_NDK = '/usr/lib/android-ndk'
-    ANDROID_NDK_HOME = '/usr/lib/android-ndk'
+    LEIN_HOME         = '/var/tmp/lein'
+    YARN_CACHE_FOLDER = '/var/tmp/yarn'
+    BUNDLE_PATH       = '/var/tmp/bundle'
+    GRADLE_USER_HOME  = '/var/tmp/gradle'
+    ANDROID_HOME      = '/usr/lib/android-sdk'
+    ANDROID_SDK_ROOT  = '/usr/lib/android-sdk'
+    ANDROID_NDK       = '/usr/lib/android-ndk'
+    ANDROID_NDK_HOME  = '/usr/lib/android-ndk'
   }
 
   stages {
