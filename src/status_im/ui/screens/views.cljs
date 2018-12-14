@@ -35,7 +35,6 @@
             [status-im.ui.screens.wallet.request.views :refer [wallet-request-contacts-list request-transaction send-transaction-request]]
             [status-im.ui.screens.wallet.components.views :as wallet.components]
             [status-im.ui.screens.wallet.onboarding.views :as wallet.onboarding]
-            [status-im.ui.screens.wallet.transaction-fee.views :as wallet.transaction-fee]
             [status-im.ui.screens.wallet.settings.views :as wallet-settings]
             [status-im.ui.screens.wallet.transactions.views :as wallet-transactions]
             [status-im.ui.screens.wallet.transaction-sent.views :refer [transaction-sent transaction-sent-modal]]
@@ -187,10 +186,7 @@
           [:modal send-transaction-modal]
 
           :wallet-transaction-sent
-          [:modal transaction-sent-modal]
-
-          :wallet-transaction-fee
-          [:modal wallet.transaction-fee/transaction-fee]}
+          [:modal transaction-sent-modal]}
          :config
          {:headerMode       "none"
           :initialRouteName "wallet-send-transaction-modal"}}
@@ -204,10 +200,7 @@
           [:modal send-transaction-modal]
 
           :wallet-transaction-sent
-          [:modal transaction-sent-modal]
-
-          :wallet-transaction-fee
-          [:modal wallet.transaction-fee/transaction-fee]}
+          [:modal transaction-sent-modal]}
          :config
          {:headerMode       "none"
           :initialRouteName "wallet-onboarding-setup-modal"}}
@@ -287,11 +280,6 @@
        :wallet-settings-assets
        {:screen (nav-reagent/stack-screen
                  (wrap-modal :wallet-settings-assets wallet-settings/manage-assets))}
-
-       :wallet-transaction-fee
-       {:screen (nav-reagent/stack-screen
-                 (wrap-modal :wallet-transaction-fee
-                             wallet.transaction-fee/transaction-fee))}
 
        :wallet-transactions-filter
        {:screen (nav-reagent/stack-screen

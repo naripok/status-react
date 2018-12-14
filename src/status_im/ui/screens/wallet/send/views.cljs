@@ -2,12 +2,8 @@
   (:require-macros [status-im.utils.views :refer [defview letsubs]])
   (:require [clojure.string :as string]
             [re-frame.core :as re-frame]
-            [status-im.contact.db :as contact.db]
             [status-im.i18n :as i18n]
             [status-im.ui.components.animation :as animation]
-            [status-im.ui.components.bottom-buttons.view :as bottom-buttons]
-            [status-im.ui.components.button.view :as button]
-            [status-im.ui.components.common.common :as common]
             [status-im.ui.components.icons.vector-icons :as vector-icons]
             [status-im.ui.components.react :as react]
             [status-im.ui.components.status-bar.view :as status-bar]
@@ -18,61 +14,28 @@
             [status-im.ui.components.list.views :as list]
             [status-im.ui.components.list.styles :as list.styles]
             [status-im.ui.screens.chat.photos :as photos]
-            [status-im.ui.screens.wallet.components.styles :as wallet.components.styles]
-            [status-im.ui.screens.wallet.components.views :as components]
             [status-im.ui.screens.wallet.components.views :as wallet.components]
             [status-im.ui.screens.wallet.db :as wallet.db]
-            [status-im.ui.screens.wallet.send.animations :as send.animations]
             [status-im.ui.screens.wallet.send.styles :as styles]
             [status-im.ui.screens.wallet.send.events :as events]
             [status-im.ui.screens.wallet.styles :as wallet.styles]
-            [status-im.ui.screens.wallet.main.views :as wallet.main.views]
             [status-im.utils.money :as money]
-            [status-im.utils.security :as security]
             [status-im.utils.utils :as utils]
             [status-im.utils.ethereum.tokens :as tokens]
             [status-im.utils.ethereum.core :as ethereum]
-            [status-im.transport.utils :as transport.utils]
             [status-im.utils.ethereum.ens :as ens]
             [taoensso.timbre :as log]
             [reagent.core :as reagent]
             [status-im.ui.components.colors :as colors]
             [status-im.ui.screens.wallet.utils :as wallet.utils]))
 
-(defn- toolbar [modal? title]
-  (let [action (if modal? actions/close-white actions/back-white)]
+(defn- toolbar [flow title chat-id]
+  (let [action (if (#{:chat :dapp} flow) actions/close-white actions/back-white)]
     [toolbar/toolbar {:style wallet.styles/toolbar}
-     [toolbar/nav-button (action (if modal?
-                                   #(re-frame/dispatch [:wallet/discard-transaction-navigate-back])
+     [toolbar/nav-button (action (if (= :chat flow)
+                                   #(re-frame/dispatch [:chat.ui/navigate-to-chat chat-id {}])
                                    #(actions/default-handler)))]
      [toolbar/content-title {:color :white :font-weight :bold :font-size 17} title]]))
-
-(defn- advanced-cartouche [native-currency {:keys [max-fee gas gas-price]}]
-  [react/view
-   [wallet.components/cartouche {:on-press  #(do (re-frame/dispatch [:wallet.send/clear-gas])
-                                                 (re-frame/dispatch [:navigate-to :wallet-transaction-fee]))}
-    (i18n/label :t/wallet-transaction-fee)
-    [react/view {:style               styles/advanced-options-text-wrapper
-                 :accessibility-label :transaction-fee-button}
-     [react/text {:style styles/advanced-fees-text}
-      (str max-fee " " (wallet.utils/display-symbol native-currency))]
-     [react/text {:style styles/advanced-fees-details-text}
-      (str (money/to-fixed gas) " * " (money/to-fixed (money/wei-> :gwei gas-price)) (i18n/label :t/gwei))]]]])
-
-(defn- advanced-options [advanced? native-currency transaction scroll]
-  [react/view {:style styles/advanced-wrapper}
-   [react/touchable-highlight {:on-press (fn []
-                                           (re-frame/dispatch [:wallet.send/toggle-advanced (not advanced?)])
-                                           (when (and scroll @scroll) (utils/set-timeout #(.scrollToEnd @scroll) 350)))}
-    [react/view {:style styles/advanced-button-wrapper}
-     [react/view {:style               styles/advanced-button
-                  :accessibility-label :advanced-button}
-      [react/i18n-text {:style (merge wallet.components.styles/label
-                                      styles/advanced-label)
-                        :key   :wallet-advanced}]
-      [vector-icons/icon (if advanced? :icons/up :icons/down) {:color :white}]]]]
-   (when advanced?
-     [advanced-cartouche native-currency transaction])])
 
 ;; ----------------------------------------------------------------------
 ;; Step 1 choosing an address or contact to send the transaction to
@@ -106,28 +69,25 @@
                                   :align-items         :center
                                   :justify-content     :center
                                   :border-bottom-width 2
-                                  :border-bottom-color (if current? colors/white "rgba(0,0,0,0)")}
-                      [react/text {:style {:color (if current? :white "rgba(255,255,255,0.4)")
+                                  :border-bottom-color (if current? colors/white colors/transparent)}
+                      [react/text {:style {:color     (if current? colors/white colors/white-transparent)
                                            :font-size 15}} name]]]]))
                tab-map)]
          (when-let [component-thunk (some-> tab-map tab-name :component)]
            [component-thunk])]))))
 
-;; just a helper for the buttons in choose address view
 (defn- address-button [{:keys [disabled? on-press underlay-color background-color]} content]
   [react/touchable-highlight {:underlay-color underlay-color
-                              :disabled disabled?
-                              :on-press on-press
-                              :style {:height 44
-                                      :background-color background-color
-                                      :border-radius 8
-                                      :flex 1
-                                      :align-items :center
-                                      :justify-content :center
-                                      :margin 3}}
+                              :disabled       disabled?
+                              :on-press       on-press
+                              :style          {:height           44
+                                               :background-color background-color
+                                               :border-radius    8
+                                               :flex             1
+                                               :align-items      :center
+                                               :justify-content  :center
+                                               :margin           3}}
    content])
-
-;; event code
 
 (defn open-qr-scanner [chain text-input transaction]
   (.blur @text-input)
@@ -136,7 +96,7 @@
                        (fn [qr-data]
                          (if-let [parsed-qr-data (events/extract-qr-code-details chain qr-data)]
                            (let [{:keys [chain-id]} parsed-qr-data
-                                 tx-data (events/qr-data->transaction-data parsed-qr-data)]
+                                 tx-data            (events/qr-data->transaction-data parsed-qr-data)]
                              (if (= chain-id (ethereum/chain-keyword->chain-id chain))
                                (swap! transaction merge tx-data)
                                (utils/show-popup (i18n/label :t/error)
@@ -156,7 +116,7 @@
                       value
                       #(if (ethereum/address? %)
                          (swap! transaction assoc :to-ens value :to %)
-                         (reset! error-message "Unknown ENS name"))))
+                         (reset! error-message (i18n/label :t/error-unknown-ens-name)))))
     (do (swap! transaction assoc :to value)
         (reset! error-message nil))))
 
@@ -176,34 +136,36 @@
                                              :font-size    12
                                              :bottom-value 15}])
           [react/text-input
-           {:on-change-text (partial update-recipient chain transaction error-message)
-            :auto-focus true
-            :auto-capitalize :none
-            :auto-correct false
-            :placeholder "0x... or name.eth"
-            :placeholder-text-color "rgb(143,162,234)"
-            :multiline true
-            :max-length 84
-            :ref #(reset! text-input %)
-            ;;NOTE(goranjovic)- :default-value instead of :value to prevent the flickering due to two way binding
-            :default-value (or (:to-ens @transaction) (:to @transaction))
-            :selection-color colors/green
-            :accessibility-label :recipient-address-input
-            :style styles/choose-recipient-text-input}]]
+           {:on-change-text         (partial update-recipient chain transaction error-message)
+            :auto-focus             true
+            :auto-capitalize        :none
+            :auto-correct           false
+            :placeholder            (i18n/label :t/address-or-ens-placeholder)
+            :placeholder-text-color colors/blue-shadow
+            :multiline              true
+            :max-length             84
+            :ref                    #(reset! text-input %)
+            :default-value          (or (:to-ens @transaction) (:to @transaction))
+            :selection-color        colors/green
+            :accessibility-label    :recipient-address-input
+            :style                  styles/choose-recipient-text-input}]]
          [react/view {:flex 1}]
-         [react/view {:flex-direction :row :padding 3}
-          [address-button {:underlay-color colors/white-transparent
+         [react/view {:flex-direction :row
+                      :padding        3}
+          [address-button {:underlay-color   colors/white-transparent
                            :background-color colors/black-transparent
-                           :on-press #(react/get-from-clipboard
-                                       (fn [addr]
-                                         (when (and addr (not (string/blank? addr)))
-                                           (swap! transaction assoc :to (string/trim addr)))))}
-           [react/view {:flex-direction :row
+                           :on-press         #(react/get-from-clipboard
+                                               (fn [addr]
+                                                 (when (and addr (not (string/blank? addr)))
+                                                   (swap! transaction assoc :to (string/trim addr)))))}
+           [react/view {:flex-direction     :row
                         :padding-horizontal 18}
             [vector-icons/icon :icons/paste {:color colors/white-transparent}]
-            [react/view {:flex 1 :flex-direction :row :justify-content :center}
-             [react/text {:style {:color colors/white
-                                  :font-size 15
+            [react/view {:flex            1
+                         :flex-direction  :row
+                         :justify-content :center}
+             [react/text {:style {:color       colors/white
+                                  :font-size   15
                                   :line-height 22}}
               (i18n/label :t/paste)]]]]
           [address-button {:underlay-color colors/white-transparent
@@ -219,66 +181,66 @@
                                                          (utils/show-popup (i18n/label :t/error)
                                                                            (i18n/label :t/camera-access-error)))
                                                        50)}]))}
-           [react/view {:flex-direction :row
+           [react/view {:flex-direction     :row
                         :padding-horizontal 18}
             [vector-icons/icon :icons/qr {:color colors/white-transparent}]
-            [react/view {:flex 1 :flex-direction :row :justify-content :center}
-             [react/text {:style {:color colors/white
-                                  :font-size 15
+            [react/view {:flex            1
+                         :flex-direction  :row
+                         :justify-content :center}
+             [react/text {:style {:color       colors/white
+                                  :font-size   15
                                   :line-height 22}}
               (i18n/label :t/scan)]]]]
           (let [disabled? (string/blank? (:to @transaction))]
-            [address-button {:disabled? disabled?
-                             :underlay-color colors/black-transparent
+            [address-button {:disabled?        disabled?
+                             :underlay-color   colors/black-transparent
                              :background-color (if disabled? colors/blue colors/white)
                              :on-press
                              #(events/chosen-recipient chain (:to @transaction) on-address
                                                        (fn on-error [_]
                                                          (reset! error-message (i18n/label :t/invalid-address))))}
-             [react/text {:style {:color (if disabled? colors/white colors/blue)
-                                  :font-size 15
+             [react/text {:style {:color       (if disabled? colors/white colors/blue)
+                                  :font-size   15
                                   :line-height 22}}
               (i18n/label :t/next)]])]]))))
 
-;;  #(re-frame/dispatch [:wallet/fill-request-from-contact contact])
-
 (defn info-page [message]
-  [react/view {:style {:flex 1
-                       :align-items :center
-                       :justify-content :center
+  [react/view {:style {:flex             1
+                       :align-items      :center
+                       :justify-content  :center
                        :background-color colors/blue}}
    [vector-icons/icon :icons/info {:color colors/white}]
-   [react/text {:style {:max-width 144
-                        :margin-top 15
-                        :color colors/white
-                        :font-size 15
-                        :text-align :center
+   [react/text {:style {:max-width   144
+                        :margin-top  15
+                        :color       colors/white
+                        :font-size   15
+                        :text-align  :center
                         :line-height 22}}
     message]])
 
 (defn render-contact [on-contact contact]
   {:pre [(fn? on-contact) (map? contact) (:address contact)]}
   [react/touchable-highlight {:underlay-color colors/white-transparent
-                              :on-press #(on-contact contact)}
-   [react/view {:flex 1
+                              :on-press       #(on-contact contact)}
+   [react/view {:flex           1
                 :flex-direction :row
-                :padding-right 23
-                :padding-left 16
-                :padding-top 12}
+                :padding-right  23
+                :padding-left   16
+                :padding-top    12}
     [react/view {:margin-top 3}
      [photos/photo (:photo-path contact) {:size list.styles/image-size}]]
     [react/view {:margin-left 16
-                 :flex 1}
+                 :flex        1}
      [react/view {:accessibility-label :contact-name-text
-                  :margin-bottom 2}
-      [react/text {:style {:font-size 15
+                  :margin-bottom       2}
+      [react/text {:style {:font-size   15
                            :font-weight "500"
                            :line-height 22
-                           :color colors/white}}
+                           :color       colors/white}}
        (:name contact)]]
-     [react/text {:style {:font-size 15
-                          :line-height 22
-                          :color "rgba(255,255,255,0.4)"}
+     [react/text {:style               {:font-size   15
+                                        :line-height 22
+                                        :color       colors/white-transparent}
                   :accessibility-label :contact-address-text}
       (ethereum/normalized-address (:address contact))]]]])
 
@@ -293,42 +255,33 @@
                                   render-contact
                                   on-contact)}]]))
 
-;; TODO clean up all dependencies here, leaving these in place until all behavior is verified on
-;; all platforms
-(defn- choose-address-contact [{:keys [modal? contacts scroll advanced? transaction network all-tokens amount-input network-status] :as opts}]
-
-  (let [transaction                  (reagent/atom transaction)
-        chain                        (ethereum/network->chain-keyword network)
-        native-currency              (tokens/native-currency chain)
-        {:keys [decimals] :as token} (tokens/asset-for all-tokens chain symbol)
-        online? (= :online network-status)]
+(defn- choose-address-contact [{:keys [modal? contacts transaction network network-status]}]
+  (let [transaction     (reagent/atom transaction)
+        chain           (ethereum/network->chain-keyword network)
+        native-currency (tokens/native-currency chain)
+        online?         (= :online network-status)]
     [wallet.components/simple-screen {:avoid-keyboard? (not modal?)
                                       :status-bar-type (if modal? :modal-wallet :wallet)}
-     [toolbar modal? (i18n/label :t/send-to)]
+     [toolbar :wallet (i18n/label :t/send-to) nil]
      [simple-tab-navigator
-      {:address
-       {:name "Address"
-        :component (choose-address-view
-                    {:chain chain
-                     :transaction transaction
-                     :on-address
-                     #(re-frame/dispatch [:navigate-to :wallet-choose-amount
-                                          {:transaction (swap! transaction assoc :to %)
-                                           :native-currency native-currency
-                                           :modal? modal?}])})}
-       :contacts
-       {:name "Contacts"
-        :component
-        (partial choose-contact-view
-                 {:contacts contacts
-                  :on-contact
-                  (fn [{:keys [address] :as contact}]
-                    (re-frame/dispatch
-                     [:navigate-to :wallet-choose-amount
-                      {:modal? modal?
-                       :native-currency native-currency
-                       :contact contact
-                       :transaction (swap! transaction assoc :to address)}]))})}}
+      {:address  {:name      (i18n/label :t/wallet-address-tab-title)
+                  :component (choose-address-view
+                              {:chain       chain
+                               :transaction transaction
+                               :on-address  #(re-frame/dispatch [:navigate-to :wallet-choose-amount
+                                                                 {:transaction     (swap! transaction assoc :to %)
+                                                                  :native-currency native-currency
+                                                                  :modal?          modal?}])})}
+       :contacts {:name      (i18n/label :t/wallet-contacts-tab-title)
+                  :component (partial choose-contact-view
+                                      {:contacts   contacts
+                                       :on-contact (fn [{:keys [address] :as contact}]
+                                                     (re-frame/dispatch
+                                                      [:navigate-to :wallet-choose-amount
+                                                       {:modal?          modal?
+                                                        :native-currency native-currency
+                                                        :contact         contact
+                                                        :transaction     (swap! transaction assoc :to address)}]))})}}
       :address]]))
 
 ;; ----------------------------------------------------------------------
@@ -340,23 +293,30 @@
 ;; worthy abstraction
 (defn- anim-ref-send
   "Call one of the methods in an animation ref.
+   Takes an animation ref (a map of keys to animation tiggering methods)
+   a keyword that should equal one of the keys in the map  and optional args to be sent to the animation.
 
-Takes an animation ref (a map of keys to animation tiggering methods)
-
-A keyword that should equal one of the keys in the map
-
-and optional args to be sent to the animation.
-
-Example:
-(anim-ref-send slider-ref :open!)
-(anim-ref-send slider-ref :move-top-left! 25 25)"
+   Example:
+    (anim-ref-send slider-ref :open!)
+    (anim-ref-send slider-ref :move-top-left! 25 25)"
   [anim-ref signal & args]
   (when anim-ref
     (assert (get anim-ref signal)
-            (str "Key " signal
-                 " was not found in animation ref. Should be in "
+            (str "Key " signal " was not found in animation ref. Should be in "
                  (pr-str (keys anim-ref)))))
   (some-> anim-ref (get signal) (apply args)))
+
+(defn static-modal [children]
+  (let [modal-screen-bg-color (colors/alpha colors/black 0.7)]
+    [react/view {:style
+                 {:position         :absolute
+                  :top              0
+                  :bottom           0
+                  :left             0
+                  :right            0
+                  :z-index          1
+                  :background-color modal-screen-bg-color}}
+     children]))
 
 (defn- slide-up-modal
   "Creates a modal that slides up from the bottom of the screen and
@@ -370,7 +330,7 @@ Example:
   Options:
     :anim-ref - takes a function that will be called with a map of
         animation methods.
-    :swipe-dismiss? - a boolean that determines wether the modal screen
+    :swipe-dismiss? - a boolean that determines whether the modal screen
         should be dismissed on swipe down gesture
 
   This slide-up-modal will callback the `anim-ref` fn and provides a
@@ -380,7 +340,6 @@ Example:
   :close! - closes the modal"
   [{:keys [anim-ref swipe-dismiss?]} children]
   {:pre [(fn? anim-ref)]}
-  ;; Add swipe down to dissmiss
   (let [window-height (:height (react/get-dimensions "window") 1000)
 
         bottom-position  (animation/create-value (- window-height))
@@ -388,8 +347,8 @@ Example:
         modal-screen-bg-color
         (animation/interpolate bottom-position
                                {:inputRange [(- window-height) 0]
-                                :outputRange ["rgba(0,0,0,0)"
-                                              "rgba(0,0,0,0.7)"]})
+                                :outputRange [colors/black
+                                              (colors/alpha colors/black 0.7)]})
         modal-screen-top
         (animation/interpolate bottom-position
                                {:inputRange [(- window-height)
@@ -447,36 +406,33 @@ Example:
 
 (defn- custom-gas-panel-action [{:keys [label active on-press icon background-color]} child]
   {:pre [label (boolean? active) on-press icon background-color]}
-  [react/view {:style {:flex-direction :row
+  [react/view {:style {:flex-direction     :row
                        :padding-horizontal 22
-                       :padding-vertical 11
-                       :align-items :center}}
+                       :padding-vertical   11
+                       :align-items        :center}}
    [react/touchable-highlight
     {:disabled active
      :on-press on-press}
-    [react/animated-view {:style {:border-radius 21
-                                  :width 40
-                                  :height 40
-                                  :justify-content :center
-                                  :align-items :center
+    [react/animated-view {:style {:border-radius    21
+                                  :width            40
+                                  :height           40
+                                  :justify-content  :center
+                                  :align-items      :center
                                   :background-color background-color}}
      [vector-icons/icon icon {:color (if active colors/white colors/gray)}]]]
    [react/touchable-highlight
     {:disabled active
      :on-press on-press
-     :style {:flex 1}}
-    [react/text {:style {:color colors/black
-                         :font-size 17
+     :style    {:flex 1}}
+    [react/text {:style {:color        colors/black
+                         :font-size    17
                          :padding-left 17
-                         :line-height 40}}
+                         :line-height  40}}
      label]]
    child])
 
 (defn- custom-gas-edit
-  [{:keys [on-gas-input-change
-           on-gas-price-input-change
-           gas-input
-           gas-price-input]}]
+  [_opts]
   (let [gas-error (reagent/atom nil)
         gas-price-error (reagent/atom nil)]
     (fn [{:keys [on-gas-input-change
@@ -484,69 +440,68 @@ Example:
                  gas-input
                  gas-price-input]}]
       [react/view {:style {:padding-horizontal 22
-                           :padding-vertical 11}}
-       [react/text "Gas price"]
+                           :padding-vertical   11}}
+       [react/text (i18n/label :t/gas-price)]
        (when @gas-price-error
          [react/view {:style {:z-index 100}}
           [tooltip/tooltip @gas-price-error
            {:color        colors/blue-light
             :font-size    12
             :bottom-value -3}]])
-       [react/view {:style {:border-radius 8
-                            :background-color colors/gray-light
-                            :padding-vertical 16
+       [react/view {:style {:border-radius      8
+                            :background-color   colors/gray-light
+                            :padding-vertical   16
                             :padding-horizontal 16
-                            :flex-direction :row
-                            :align-items :flex-end
-                            :margin-vertical 7}}
-        [react/text-input {:keyboard-type :numeric
-                           :placeholder "0"
+                            :flex-direction     :row
+                            :align-items        :center
+                            :margin-vertical    7}}
+        [react/text-input {:keyboard-type  :numeric
+                           :placeholder    "0"
                            :on-change-text (fn [x]
                                              (if-not (money/bignumber x)
-                                               (reset! gas-price-error "Invalid number format")
+                                               (reset! gas-price-error (i18n/label :t/invalid-number-format))
                                                (reset! gas-price-error nil))
                                              (on-gas-price-input-change x))
-                           :value gas-price-input
-                           :style {:font-size 15
-                                   :flex 1}}]
-        [react/text "Gwei"]]
+                           :default-value  gas-price-input
+                           :style          {:font-size 15
+                                            :flex      1}}]
+        [react/text (i18n/label :t/gwei)]]
        [react/text {:style {:color colors/gray
                             :font-size 12}}
-        "Gas price is the amount you are willing to pay per unit of gas. Increasing this price may help your transaction get processed faster."]
-       [react/text {:style {:margin-top 22}} "Gas limit"]
+        (i18n/label :t/gas-cost-explanation)]
+       [react/text {:style {:margin-top 22}} (i18n/label :t/gas-limit)]
        (when @gas-error
          [react/view {:style {:z-index 100}}
           [tooltip/tooltip @gas-error
            {:color        colors/blue-light
             :font-size    12
             :bottom-value -3}]])
-       [react/view {:style {:border-radius 8
-                            :background-color colors/gray-light
-                            :padding-vertical 16
+       [react/view {:style {:border-radius      8
+                            :background-color   colors/gray-light
+                            :padding-vertical   16
                             :padding-horizontal 16
-                            :flex-direction :row
-                            :align-items :flex-end
-                            :margin-vertical 7}}
-        [react/text-input {:keyboard-type :numeric
-                           :placeholder "0"
-                           :on-change-text
-                           (fn [x]
-                             (if-not (money/bignumber x)
-                               (reset! gas-error "Invalid number format")
-                               (reset! gas-error nil))
-                             (on-gas-input-change x))
-                           :value gas-input
-                           :style {:font-size 15
-                                   :flex 1}}]]
-       [react/text {:style {:color colors/gray
+                            :flex-direction     :row
+                            :align-items        :flex-end
+                            :margin-vertical    7}}
+        [react/text-input {:keyboard-type  :numeric
+                           :placeholder    "0"
+                           :on-change-text (fn [x]
+                                             (if-not (money/bignumber x)
+                                               (reset! gas-error (i18n/label :t/invalid-number-format))
+                                               (reset! gas-error nil))
+                                             (on-gas-input-change x))
+                           :default-value  gas-input
+                           :style          {:font-size 15
+                                            :flex      1}}]]
+       [react/text {:style {:color     colors/gray
                             :font-size 12}}
-        "Gas limit is the maximum units of gas you're willing to spend on this transaction."]])))
+        (i18n/label :t/gas-limit-explanation)]])))
 
 (defn custom-gas-derived-state [{:keys [gas-input gas-price-input custom-open?]}
                                 {:keys [custom-gas custom-gas-price
                                         optimal-gas optimal-gas-price
                                         gas-gas-price->fiat
-                                        fiat-currency] :as opts}]
+                                        fiat-currency]}]
   (let [custom-input-gas
         (or (when (not (string/blank? gas-input))
               (money/bignumber gas-input))
@@ -583,8 +538,8 @@ Example:
                                       gas-gas-price->fiat on-submit] :as opts}]
   {:pre [optimal-gas optimal-gas-price gas-gas-price->fiat on-submit]}
   (let [custom-open? (and custom-gas custom-gas-price)
-        state-atom   (reagent.core/atom {:custom-open? (boolean custom-open?)
-                                         :gas-input nil
+        state-atom   (reagent.core/atom {:custom-open?    (boolean custom-open?)
+                                         :gas-input       nil
                                          :gas-price-input nil})
 
         ;; slider animations
@@ -595,12 +550,12 @@ Example:
 
         optimal-button-bg-color
         (animation/interpolate slider-height
-                               {:inputRange [0 200 290]
+                               {:inputRange  [0 200 290]
                                 :outputRange [colors/blue colors/gray-light colors/gray-light]})
 
         custom-button-bg-color
         (animation/interpolate slider-height
-                               {:inputRange [0 200 290]
+                               {:inputRange  [0 200 290]
                                 :outputRange [colors/gray-light colors/blue colors/blue]})
 
         open-slider!  #(do
@@ -616,137 +571,133 @@ Example:
                     gas-input-value
                     gas-map-for-submit]}
             (custom-gas-derived-state @state-atom opts)]
-        [react/view {:style {:background-color colors/white
-                             :border-top-left-radius 8
+        [react/view {:style {:background-color        colors/white
+                             :border-top-left-radius  8
                              :border-top-right-radius 8}}
          [react/view {:style {:justify-content :center
-                              :padding-top 22
-                              :padding-bottom 7}}
+                              :padding-top     22
+                              :padding-bottom  7}}
           [react/text
            {:style {:color colors/black
-                    :font-size 22
+                    :font-size   22
                     :line-height 28
                     :font-weight :bold
-                    :text-align :center}}
-           "Network fee settings"]
+                    :text-align  :center}}
+           (i18n/label :t/network-fee-settings)]
           [react/text
-           {:style {:color colors/gray
-                    :font-size 15
-                    :line-height 22
-                    :text-align :center
+           {:style {:color              colors/gray
+                    :font-size          15
+                    :line-height        22
+                    :text-align         :center
                     :padding-horizontal 45
-                    :padding-vertical 8}}
-           "This fee, known as gas is paid directly to the Ethereum network. Status does not collect any of these funds"]]
+                    :padding-vertical   8}}
+           (i18n/label :t/network-fee-explanation)]]
          [react/view {:style {:border-top-width 1
                               :border-top-color colors/black-transparent
-                              :padding-top 11
-                              :padding-bottom 7}}
-          (custom-gas-panel-action
-           {:icon :icons/time
-            :label "Optimal"
-            :on-press close-slider!
-            :background-color optimal-button-bg-color
-            :active  (not (:custom-open? @state-atom))}
-           [react/text {:style {:color colors/gray
-                                :font-size 17
-                                :padding-left 17
-                                :line-height 20}}
-            optimal-fiat-price])
-          (custom-gas-panel-action
-           {:icon :icons/sliders
-            :label "Custom"
-            :on-press open-slider!
-            :background-color custom-button-bg-color
-            :active (:custom-open? @state-atom)}
-           [react/text {:style {:color colors/gray
-                                :font-size 17
-                                :padding-left 17
-                                :line-height 20
-                                :text-align :center
-                                :min-width 60}}
-            custom-fiat-price])
+                              :padding-top      11
+                              :padding-bottom   7}}
+          (custom-gas-panel-action {:icon             :icons/time
+                                    :label            (i18n/label :t/optimal-gas-option)
+                                    :on-press         close-slider!
+                                    :background-color optimal-button-bg-color
+                                    :active           (not (:custom-open? @state-atom))}
+                                   [react/text {:style {:color        colors/gray
+                                                        :font-size    17
+                                                        :padding-left 17
+                                                        :line-height  20}}
+                                    optimal-fiat-price])
+          (custom-gas-panel-action {:icon             :icons/sliders
+                                    :label            (i18n/label :t/custom-gas-option)
+                                    :on-press         open-slider!
+                                    :background-color custom-button-bg-color
+                                    :active           (:custom-open? @state-atom)}
+                                   [react/text {:style {:color        colors/gray
+                                                        :font-size    17
+                                                        :padding-left 17
+                                                        :line-height  20
+                                                        :text-align   :center
+                                                        :min-width    60}}
+                                    custom-fiat-price])
           [react/animated-view {:style {:background-color colors/white
-                                        :height slider-height
-                                        :overflow :hidden}}
+                                        :height           slider-height
+                                        :overflow         :hidden}}
            [custom-gas-edit
-            {:on-gas-price-input-change
-             #(when (money/bignumber %)
-                (swap! state-atom assoc :gas-price-input %))
-             :on-gas-input-change
-             #(when (money/bignumber %)
-                (swap! state-atom assoc :gas-input %))
-             :gas-price-input gas-price-input-value
-             :gas-input gas-input-value}]]
-          [react/view {:style {:flex-direction :row
-                               :justify-content :center
+            {:on-gas-price-input-change #(when (money/bignumber %)
+                                           (swap! state-atom assoc :gas-price-input %))
+             :on-gas-input-change       #(when (money/bignumber %)
+                                           (swap! state-atom assoc :gas-input %))
+             :gas-price-input           gas-price-input-value
+             :gas-input                 gas-input-value}]]
+          [react/view {:style {:flex-direction   :row
+                               :justify-content  :center
                                :padding-vertical 16}}
            [react/touchable-highlight
             {:on-press #(on-submit gas-map-for-submit)
-             :style {:padding-horizontal 39
-                     :padding-vertical 12
-                     :border-radius 8
-                     :background-color colors/blue-light}}
-            [react/text {:style {:font-size 15
+             :style    {:padding-horizontal 39
+                        :padding-vertical   12
+                        :border-radius      8
+                        :background-color   colors/blue-light}}
+            [react/text {:style {:font-size   15
                                  :line-height 22
-                                 :color colors/blue}}
-             "Update"]]]]]))))
+                                 :color       colors/blue}}
+             (i18n/label :t/update)]]]]]))))
 
 ;; Choosing the asset
 
 (defn white-toolbar [modal? title]
   (let [action (if modal? actions/close actions/back)]
-    [toolbar/toolbar {:style {:background-color colors/white
+    [toolbar/toolbar {:style {:background-color    colors/white
                               :border-bottom-width 1
                               :border-bottom-color colors/black-transparent}}
      [toolbar/nav-button (action (if modal?
                                    #(re-frame/dispatch [:wallet/discard-transaction-navigate-back])
                                    #(actions/default-handler)))]
-     [toolbar/content-title {:color colors/black :font-size 17 :font-weight :bold} title]]))
+     [toolbar/content-title {:color       colors/black
+                             :font-size   17
+                             :font-weight :bold} title]]))
 
-(defn- render-token-item [{:keys [symbol name icon decimals amount] :as token}]
+(defn- render-token-item [{:keys [name icon decimals amount] :as coin}]
   [list/item
    [list/item-image icon]
    [list/item-content
     [react/text {:style {:margin-right 10, :color colors/black}} name]
     [list/item-secondary (str (wallet.utils/format-amount amount decimals)
                               " "
-                              (wallet.utils/display-symbol token))]]])
+                              (wallet.utils/display-symbol coin))]]])
 
-;; TODO parameterize this with on-asset handler
 (defview choose-asset []
   (letsubs [assets [:wallet/transferrable-assets-with-amount]
             {:keys [on-asset]} [:get-screen-params :wallet-choose-asset]]
-    [react/keyboard-avoiding-view {:flex 1 :background-color colors/white}
+    [react/keyboard-avoiding-view {:flex             1
+                                   :background-color colors/white}
      [status-bar/status-bar {:type :modal-white}]
-     [white-toolbar false "Choose asset" #_(i18n/label :t/wallet-assets)]
+     [white-toolbar false (i18n/label :t/choose-asset)]
      [react/view {:style (assoc components.styles/flex :background-color :white)}
       [list/flat-list {:default-separator? false ;true
                        :data               assets
                        :key-fn             (comp str :symbol)
                        :render-fn          #(do
-                                              [react/touchable-highlight {:on-press
-                                                                          (fn []
-                                                                            (on-asset %))
+                                              [react/touchable-highlight {:on-press       (fn [] (on-asset %))
                                                                           :underlay-color colors/black-transparent}
                                                (render-token-item %)])}]]]))
 
 (defn show-current-asset [{:keys [name icon decimals amount] :as token}]
-  [react/view {:style {:flex-direction :row,
-                       :justify-content :center
+  [react/view {:style {:flex-direction     :row,
+                       :justify-content    :center
                        :padding-horizontal 21
-                       :padding-vertical 12}}
+                       :padding-vertical   12}}
    [list/item-image icon]
    [react/view {:margin-horizontal 9
-                :flex 1}
+                :flex              1}
     [list/item-content
      [react/text {:style {:margin-right 10,
-                          :font-weight "500"
-                          :font-size 15
-                          :color colors/white}} name]
-     [react/text {:style {:font-size 14
-                          :padding-top 4
-                          :color "rgba(255,255,255,0.4)"}
-                  :ellipsize-mode :middle
+                          :font-weight  "500"
+                          :font-size    15
+                          :color        colors/white}} name]
+     [react/text {:style           {:font-size   14
+                                    :padding-top 4
+                                    :color       colors/white-transparent}
+                  :ellipsize-mode  :middle
                   :number-of-lines 1}
       (str (wallet.utils/format-amount amount decimals)
            " "
@@ -769,24 +720,21 @@ Example:
                       (ethereum/network->chain-keyword network)
                       token-symbol)))
 
-(defn create-initial-state [{:keys [symbol decimals] :as token} amount]
-  {:input-amount (when amount
-                   (when-let [amount' (money/internal->formatted amount symbol decimals)]
-                     (str amount')))
-   :inverted false
-   :edit-gas false
+(defn create-initial-state [{:keys [symbol decimals]} amount]
+  {:input-amount  (when amount
+                    (when-let [amount' (money/internal->formatted amount symbol decimals)]
+                      (str amount')))
+   :inverted      false
+   :edit-gas      false
    :error-message nil})
 
-(defn toggle-edit-gas [state]
-  (swap! state update :edit-gas not))
-
-(defn input-currency-symbol [{:keys [inverted] :as state} {:keys [symbol] :as token} {:keys [code] :as fiat-currency}]
+(defn input-currency-symbol [{:keys [inverted] :as state} {:keys [symbol] :as coin} {:keys [code]}]
   {:pre [(boolean? inverted) (keyword? symbol) (string? code)]}
-  (if-not (:inverted state) (name (:symbol token)) code))
+  (if-not (:inverted state) (wallet.utils/display-symbol coin) code))
 
-(defn converted-currency-symbol [{:keys [inverted] :as state} {:keys [symbol] :as token} {:keys [code] :as fiat-currency}]
+(defn converted-currency-symbol [{:keys [inverted] :as state} {:keys [symbol] :as coin} {:keys [code]}]
   {:pre [(boolean? inverted) (keyword? symbol) (string? code)]}
-  (if (:inverted state) (name (:symbol token)) code))
+  (if (:inverted state) (wallet.utils/display-symbol coin) code))
 
 (defn token->fiat-conversion [prices token fiat-currency value]
   {:pre [(map? prices) (map? token) (map? fiat-currency) value]}
@@ -808,7 +756,6 @@ Example:
 
 (defn valid-input-amount? [input-amount]
   (and (not (string/blank? input-amount))
-       ;; we are ignoring precision for this case
        (not (:error (wallet.db/parse-amount input-amount 100)))))
 
 (defn converted-currency-amount [{:keys [input-amount inverted]} token fiat-currency prices]
@@ -836,7 +783,7 @@ Example:
 
 (defn update-input-errors [{:keys [input-amount inverted] :as state} token fiat-currency prices]
   {:pre [(map? state) (map? token) (map? fiat-currency) (map? prices)]}
-  (let [{:keys [value error]}
+  (let [{:keys [_value error]}
         (wallet.db/parse-amount input-amount
                                 (if inverted 2 (:decimals token)))]
     (if-let [error-msg
@@ -844,7 +791,7 @@ Example:
                error error
                (not (money/sufficient-funds? (current-token-input-amount state token fiat-currency prices)
                                              (:amount token)))
-               "Insufficient funds"
+               (i18n/label :t/wallet-insufficient-funds)
                :else nil)]
       (assoc state :error-message error-msg)
       state)))
@@ -858,8 +805,9 @@ Example:
     (update-input-errors token fiat-currency prices)))
 
 (defn max-fee [{:keys [gas gas-price]}]
-  {:pre [gas gas-price]}
-  (money/wei->ether (.times gas gas-price)))
+  (if (and gas gas-price)
+    (money/wei->ether (.times gas gas-price))
+    0))
 
 (defn network-fees [prices token fiat-currency gas-ether-price]
   (some-> (token->fiat-conversion prices token fiat-currency gas-ether-price)
@@ -873,50 +821,50 @@ Example:
        (cb {:optimal-gas (ethereum/estimate-gas symbol)
             :optimal-gas-price gas-price})))))
 
-(defn optimal-gas-present? [{:keys [optimal-gas optimal-gas-price] :as transaction}]
+(defn optimal-gas-present? [{:keys [optimal-gas optimal-gas-price]}]
   (and optimal-gas optimal-gas-price))
 
-(defn current-gas [{:keys [gas gas-price optimal-gas optimal-gas-price] :as transaction}]
+(defn current-gas [{:keys [gas gas-price optimal-gas optimal-gas-price]}]
   {:gas (or gas optimal-gas) :gas-price (or gas-price optimal-gas-price)})
 
-;; TODO derived state
+(defn refresh-optimal-gas [symbol tx-atom]
+  (fetch-optimal-gas symbol
+                     (fn [res]
+                       (swap! tx-atom merge res))))
 
-;; !!! only send gas and gas-price in a transaction if they are custom gas prices!!!
-(defn choose-amount-token-helper [{:keys [balance network prices fiat-currency
+(defn choose-amount-token-helper [{:keys [network
                                           native-currency
                                           all-tokens
-                                          modal?
                                           contact
                                           transaction]}]
   {:pre [(map? native-currency)]}
-  (let [tx-atom (reagent/atom transaction)
-        token (or (fetch-token all-tokens network (:symbol transaction))
-                  native-currency)
-        state-atom (reagent/atom (create-initial-state token (:amount transaction)))
+  (let [tx-atom                (reagent/atom transaction)
+        coin                   (or (fetch-token all-tokens network (:symbol transaction))
+                                   native-currency)
+        state-atom             (reagent/atom (create-initial-state coin (:amount transaction)))
         network-fees-modal-ref (atom nil)
-        open-network-fees! #(anim-ref-send @network-fees-modal-ref :open!)
-        close-network-fees! #(anim-ref-send @network-fees-modal-ref :close!)]
-    ;; initialize the starting gas price
+        open-network-fees!     #(anim-ref-send @network-fees-modal-ref :open!)
+        close-network-fees!    #(anim-ref-send @network-fees-modal-ref :close!)]
     (when-not (optimal-gas-present? transaction)
-      (fetch-optimal-gas
-       (some :symbol [transaction native-currency])
-       #(swap! tx-atom merge %)))
+      (refresh-optimal-gas
+       (some :symbol [transaction native-currency]) tx-atom))
     (fn [{:keys [balance network prices fiat-currency
                  native-currency all-tokens modal?]}]
-      (let [symbol        (some :symbol [@tx-atom native-currency])
-            token (-> (tokens/asset-for all-tokens (ethereum/network->chain-keyword network) symbol)
+      (let [symbol (some :symbol [@tx-atom native-currency])
+            coin  (-> (tokens/asset-for all-tokens (ethereum/network->chain-keyword network) symbol)
                       (assoc :amount (get balance symbol (money/bignumber 0))))
             gas-gas-price->fiat
             (fn [gas-map]
-              (network-fees prices token fiat-currency (max-fee gas-map)))]
+              (network-fees prices coin fiat-currency (max-fee gas-map)))
+            update-amount-field #(swap! state-atom update-input-amount % coin fiat-currency prices)]
         [wallet.components/simple-screen {:avoid-keyboard? (not modal?)
                                           :status-bar-type (if modal? :modal-wallet :wallet)}
-         [toolbar modal? "Send amount"]
+         [toolbar :wallet (i18n/label :t/send-amount) nil]
          (if (empty? balance)
-           (info-page "You don't have any assets yet")
+           (info-page (i18n/label :t/wallet-no-assets-enabled))
            (let [{:keys [error-message input-amount] :as state} @state-atom
-                 input-symbol (input-currency-symbol state token fiat-currency)
-                 converted-phrase (converted-currency-phrase state token fiat-currency prices)]
+                 input-symbol     (input-currency-symbol state coin fiat-currency)
+                 converted-phrase (converted-currency-phrase state coin fiat-currency prices)]
              [react/view {:flex 1}
               ;; network fees modal
               (when (optimal-gas-present? @tx-atom)
@@ -931,150 +879,310 @@ Example:
                                     (when (and gas gas-price)
                                       (swap! tx-atom assoc :gas gas :gas-price gas-price))
                                     (close-network-fees!))))]])
-              [react/touchable-highlight {:style {:background-color colors/black-transparent}
-                                          :on-press #(re-frame/dispatch
-                                                      [:navigate-to
-                                                       :wallet-choose-asset
-                                                       {:on-asset (fn [{:keys [symbol]}]
-                                                                    (when symbol
-                                                                      (swap! tx-atom assoc :symbol symbol))
-                                                                    (re-frame/dispatch [:navigate-back]))}])
+              [react/touchable-highlight {:style          {:background-color colors/black-transparent}
+                                          :on-press       #(re-frame/dispatch
+                                                            [:navigate-to :wallet-choose-asset
+                                                             {:on-asset (fn [{:keys [symbol]}]
+                                                                          (when symbol
+                                                                            (if-not (= symbol (:symbol @tx-atom))
+                                                                              (update-amount-field nil))
+                                                                            (swap! tx-atom assoc :symbol symbol)
+                                                                            (refresh-optimal-gas symbol tx-atom))
+                                                                          (re-frame/dispatch [:navigate-back]))}])
                                           :underlay-color colors/white-transparent}
-               [show-current-asset token]]
+               [show-current-asset coin]]
               [react/view {:flex 1}
                [react/view {:flex 1}]
                [react/view {:justify-content :center
-                            :align-items :flex-end
-                            :flex-direction :row}
+                            :align-items     :center
+                            :flex-direction  :row}
                 (when error-message
                   [tooltip/tooltip error-message {:color        colors/white
                                                   :font-size    12
                                                   :bottom-value 15}])
                 [react/text-input
-                 {:on-change-text #(swap! state-atom update-input-amount % token fiat-currency prices)
-                  :keyboard-type :numeric
-                  :accessibility-label :amount-input
-                  :auto-focus true
-                  :auto-capitalize :none
-                  :auto-correct false
-                  :placeholder "0"
-                  :placeholder-text-color "rgb(143,162,234)"
-                  :multiline true
-                  :max-length 42
-                  :value input-amount
-                  :selection-color colors/green
-                  :style {:color colors/white
-                          :font-size 30
-                          :font-weight :bold
-                          :padding-horizontal 10
-                          :max-width 290}}]
-                [react/text {:style {:color (if (not (string/blank? input-amount))
-                                              colors/white
-                                              "rgb(143,162,234)")
-                                     :font-size 30
+                 {:on-change-text         update-amount-field
+                  :keyboard-type          :numeric
+                  :accessibility-label    :amount-input
+                  :auto-focus             true
+                  :auto-capitalize        :none
+                  :auto-correct           false
+                  :placeholder            "0"
+                  :placeholder-text-color colors/blue-shadow
+                  :multiline              true
+                  :max-length             20
+                  :default-value          input-amount
+                  :selection-color        colors/green
+                  :style                  {:color              colors/white
+                                           :font-size          30
+                                           :font-weight        :bold
+                                           :padding-horizontal 10
+                                           :max-width          290}}]
+                [react/text {:style {:color       (if (not (string/blank? input-amount))
+                                                    colors/white
+                                                    colors/blue-shadow)
+                                     :font-size   30
                                      :font-weight :bold}}
                  input-symbol]]
                [react/view {}
-                [react/text {:style {:text-align :center
-                                     :margin-top 16
-                                     :font-size 15
+                [react/text {:style {:text-align  :center
+                                     :margin-top  16
+                                     :font-size   15
                                      :line-height 22
-                                     :color "rgb(143,162,234)"}}
+                                     :color       colors/blue-shadow}}
                  converted-phrase]]
-               [react/view {:justify-content :center :flex-direction :row}
+               [react/view {:justify-content :center
+                            :flex-direction  :row}
                 [react/touchable-highlight {:on-press open-network-fees!
-                                            :style {:background-color colors/black-transparent
-                                                    :padding-horizontal 13
-                                                    :padding-vertical 7
-                                                    :margin-top 1
-                                                    :border-radius 8
-                                                    :opacity (if (valid-input-amount? input-amount) 1 0)}}
-                 [react/text {:style {:color colors/white
-                                      :font-size 15
+                                            :style    {:background-color   colors/black-transparent
+                                                       :padding-horizontal 13
+                                                       :padding-vertical   7
+                                                       :margin-top         1
+                                                       :border-radius      8
+                                                       :opacity            (if (valid-input-amount? input-amount) 1 0)}}
+                 [react/text {:style {:color       colors/white
+                                      :font-size   15
                                       :line-height 22}}
-
-                  (str "network fee ~ "
-                       (when (optimal-gas-present? @tx-atom)
-                         (gas-gas-price->fiat (current-gas @tx-atom)))
-                       " "
-                       (:code fiat-currency))]]]
+                  (i18n/label :t/network-fee-amount {:amount   (when (optimal-gas-present? @tx-atom)
+                                                                 (or (gas-gas-price->fiat (current-gas @tx-atom)) "0"))
+                                                     :currency (:code fiat-currency)})]]]
                [react/view {:flex 1}]
 
-               [react/view {:flex-direction :row :padding 3}
-                [address-button {:underlay-color colors/white-transparent
+               [react/view {:flex-direction :row
+                            :padding        3}
+                [address-button {:underlay-color   colors/white-transparent
                                  :background-color colors/black-transparent
-                                 :on-press #(swap! state-atom update :inverted not)}
+                                 :on-press         #(swap! state-atom update :inverted not)}
                  [react/view {:flex-direction :row}
                   [react/text {:style {:color colors/white
-                                       :font-size 15
-                                       :line-height 22
+                                       :font-size     15
+                                       :line-height   22
                                        :padding-right 10}}
                    (:code fiat-currency)]
                   [vector-icons/icon :icons/change {:color colors/white-transparent}]
-                  [react/text {:style {:color colors/white
-                                       :font-size 15
-                                       :line-height 22
+                  [react/text {:style {:color        colors/white
+                                       :font-size    15
+                                       :line-height  22
                                        :padding-left 11}}
-                   (name symbol)]]]
+                   (wallet.utils/display-symbol coin)]]]
                 (let [disabled? (string/blank? input-amount)]
-                  [address-button {:disabled? disabled?
-                                   :underlay-color colors/black-transparent
+                  [address-button {:disabled?        disabled?
+                                   :underlay-color   colors/black-transparent
                                    :background-color (if disabled? colors/blue colors/white)
-                                   :token token
-                                   :on-press
-                                   #(re-frame/dispatch [:navigate-to
-                                                        :wallet-txn-overview
-                                                        {:modal? modal?
-                                                         :contact contact
-                                                         :transaction
-                                                         (assoc
-                                                          @tx-atom
-                                                          :amount
-                                                          (money/formatted->internal
-                                                           (money/bignumber input-amount)
-                                                           (:symbol token)
-                                                           (:decimals token)))}])}
-                   [react/text {:style {:color (if disabled? colors/white colors/blue)
-                                        :font-size 15
+                                   :token            coin
+                                   :on-press         #(re-frame/dispatch [:navigate-to :wallet-txn-overview
+                                                                          {:modal?      modal?
+                                                                           :contact     contact
+                                                                           :transaction (assoc @tx-atom
+                                                                                               :amount (money/formatted->internal
+                                                                                                        (money/bignumber input-amount)
+                                                                                                        (:symbol coin)
+                                                                                                        (:decimals coin)))}])}
+                   [react/text {:style {:color       (if disabled? colors/white colors/blue)
+                                        :font-size   15
                                         :line-height 22}}
                     (i18n/label :t/next)]])]]]))]))))
 
 (defview choose-amount-token []
   (letsubs [{:keys [transaction modal? contact native-currency]} [:get-screen-params :wallet-choose-amount]
-            balance [:balance]
-            prices  [:prices]
-            network [:account/network]
-            all-tokens [:wallet/all-tokens]
+            balance       [:balance]
+            prices        [:prices]
+            network       [:account/network]
+            all-tokens    [:wallet/all-tokens]
             fiat-currency [:wallet/currency]]
-    [choose-amount-token-helper {:balance balance
-                                 :network network
-                                 :all-tokens all-tokens
-                                 :modal? modal?
-                                 :prices prices
+    [choose-amount-token-helper {:balance         balance
+                                 :network         network
+                                 :all-tokens      all-tokens
+                                 :modal?          modal?
+                                 :prices          prices
                                  :native-currency native-currency
-                                 :fiat-currency fiat-currency
-                                 :contact contact
-                                 :transaction transaction}]))
+                                 :fiat-currency   fiat-currency
+                                 :contact         contact
+                                 :transaction     transaction}]))
 
 ;; ----------------------------------------------------------------------
 ;; Step 3 Final Overview
 ;; ----------------------------------------------------------------------
 
 ;; TODOS
-;; wire in final send transation
 ;; look at duplicate logic and create a model so that we can simply execute methods against that model
-;; instead of peicing together various information for each individual computation
+;; instead of piecing together various information for each individual computation
 
-(defn transaction-overview [{:keys [modal? transaction contact token native-currency
-                                    fiat-currency prices] :as data}]
-  (let [tx-atom (atom transaction)
+(def signing-popup
+  {:background-color        colors/white
+   :border-top-left-radius  8
+   :border-top-right-radius 8
+   :position                :absolute
+   :left                    0
+   :right                   0
+   :bottom                  0})
+
+(defn confirm-modal [signing? {:keys [transaction total-amount gas-amount native-currency fiat-currency total-fiat]}]
+  [react/view {:style signing-popup}
+   [react/text {:style {:color       colors/black
+                        :font-size   15
+                        :line-height 22
+                        :margin-top  23
+                        :text-align  :center}}
+    (i18n/label :t/total)]
+   [react/text {:style {:color       colors/black
+                        :margin-top  4
+                        :font-weight :bold
+                        :font-size   22
+                        :line-height 28
+                        :text-align  :center}}
+    (str total-amount " " (name (:symbol transaction)))]
+   (when-not (= :ETH (:symbol transaction))
+     [react/text {:style {:color       colors/black
+                          :margin-top  13
+                          :font-weight :bold
+                          :font-size   22
+                          :line-height 28
+                          :text-align  :center}}
+      (str gas-amount " " (name (:symbol native-currency)))])
+   [react/text {:style {:color       colors/gray
+                        :text-align  :center
+                        :margin-top  3
+                        :line-height 21
+                        :font-size   15}}
+    (str "~ " (:symbol fiat-currency "$") total-fiat)]
+   [react/view {:style {:flex-direction  :row
+                        :justify-content :center
+                        :padding-top     16
+                        :padding-bottom  24}}
+    [react/touchable-highlight
+     {:on-press #(reset! signing? true)
+      :style    {:padding-horizontal 39
+                 :padding-vertical   12
+                 :border-radius      8
+                 :background-color   colors/blue-light}}
+     [react/text {:style {:font-size   15
+                          :line-height 22
+                          :color       colors/blue}}
+      (i18n/label :t/confirm)]]]])
+
+(defn- phrase-word [word]
+  [react/text {:style {:color       colors/blue
+                       :font-size   15
+                       :line-height 22
+                       :font-weight "500"
+                       :width       "33%"
+                       :text-align  :center}}
+   word])
+
+(defn- phrase-separator []
+  [react/view {:style {:height           "100%"
+                       :width            1
+                       :background-color colors/gray-light}}])
+
+(defview sign-modal [account {:keys [transaction contact total-amount gas-amount native-currency fiat-currency
+                                     total-fiat all-tokens chain flow]}]
+  (letsubs [password     (reagent/atom nil)
+            in-progress? (reagent/atom nil)]
+    (let [phrase (string/split (:signing-phrase account) #" ")]
+      [react/view {:style {:position :absolute
+                           :left     0
+                           :right    0
+                           :bottom   0}}
+       [tooltip/tooltip (i18n/label :t/wallet-passphrase-reminder)
+        {:bottom-value 12
+         :color        colors/blue
+         :text-color   colors/white}]
+       [react/view {:style {:background-color        colors/white
+                            :border-top-left-radius  8
+                            :border-top-right-radius 8}}
+        [react/view {:flex              1
+                     :height            46
+                     :margin-top        18
+                     :flex-direction    :row
+                     :align-items       :center
+                     :margin-horizontal "15%"
+                     :border-width      1
+                     :border-color      colors/gray-light
+                     :border-radius     218}
+         [phrase-word (first phrase)]
+         [phrase-separator]
+         [phrase-word (second phrase)]
+         [phrase-separator]
+         [phrase-word (last phrase)]]
+        [react/text {:style {:color       colors/black
+                             :margin-top  13
+                             :font-weight :bold
+                             :font-size   22
+                             :line-height 28
+                             :text-align  :center}}
+         (str "Send" " " total-amount " " (name (:symbol transaction)))]
+        (when-not (= :ETH (:symbol transaction))
+          [react/text {:style {:color       colors/black
+                               :margin-top  13
+                               :font-weight :bold
+                               :font-size   22
+                               :line-height 28
+                               :text-align  :center}}
+           (str "Send" " " gas-amount " " (name (:symbol native-currency)))])
+        [react/text {:style {:color       colors/gray
+                             :text-align  :center
+                             :margin-top  3
+                             :line-height 21
+                             :font-size   15}}
+         (str "~ " (:symbol fiat-currency "$") total-fiat)]
+        [react/text-input
+         {:auto-focus             true
+          :secure-text-entry      true
+          :placeholder            (i18n/label :t/enter-your-login-password)
+          :placeholder-text-color colors/gray
+          :on-change-text         #(reset! password %)
+          :style                  {:flex              1
+                                   :margin-top        15
+                                   :margin-horizontal 15
+                                   :padding           14
+                                   :padding-bottom    18
+                                   :background-color  colors/gray-lighter
+                                   :border-radius     8
+                                   :font-size         15
+                                   :letter-spacing    -0.2
+                                   :height            52}
+          :accessibility-label    :enter-password-input
+          :auto-capitalize        :none}]
+        [react/view {:style {:flex-direction  :row
+                             :justify-content :center
+                             :padding-top     16
+                             :padding-bottom  24}}
+         [react/touchable-highlight
+          {:on-press #(events/send-transaction-wrapper {:transaction  transaction
+                                                        :password     @password
+                                                        :flow         flow
+                                                        :all-tokens   all-tokens
+                                                        :in-progress? in-progress?
+                                                        :chain        chain
+                                                        :contact      contact
+                                                        :account      account})
+           :disabled @in-progress?
+           :style    {:padding-horizontal 39
+                      :padding-vertical   12
+                      :border-radius      8
+                      :background-color   colors/blue-light}}
+          [react/text {:style {:font-size   15
+                               :line-height 22
+                               :color       colors/blue}}
+           (i18n/label :t/send)]]]]])))
+
+(defview confirm-and-sign [params]
+  (letsubs [signing? (reagent/atom false)
+            account  [:account/account]]
+    (if-not @signing?
+      [confirm-modal signing? params]
+      [sign-modal account params])))
+
+(defn transaction-overview [{:keys [flow transaction contact token native-currency
+                                    fiat-currency prices all-tokens chain]}]
+  (let [tx-atom                (reagent/atom transaction)
         network-fees-modal-ref (atom nil)
-        open-network-fees! #(anim-ref-send @network-fees-modal-ref :open!)
-        close-network-fees! #(anim-ref-send @network-fees-modal-ref :close!)]
+        open-network-fees!     #(anim-ref-send @network-fees-modal-ref :open!)
+        close-network-fees!    #(anim-ref-send @network-fees-modal-ref :close!)
+        modal?                 (= :dapp flow)]
     (when-not (optimal-gas-present? transaction)
-      (fetch-optimal-gas
-       (some :symbol [transaction native-currency])
-       #(swap! tx-atom merge %)))
+      (refresh-optimal-gas (some :symbol [transaction native-currency]) tx-atom))
     (fn []
       (let [transaction @tx-atom
             gas-gas-price->fiat
@@ -1091,28 +1199,29 @@ Example:
                                        (:symbol token)
                                        (:decimals token))
             amount-str (str formatted-amount
-                            " " (name (:symbol token)))
+                            " " (wallet.utils/display-symbol token))
 
             fiat-amount (some-> (token->fiat-conversion prices token fiat-currency formatted-amount)
                                 (money/with-precision 2))
 
-            total-eth (some-> (.add (money/bignumber formatted-amount) network-fee-eth)
-                              (money/with-precision 11))
+            total-amount (some-> (if (= :ETH (:symbol transaction))
+                                   (.add (money/bignumber formatted-amount) network-fee-eth)
+                                   (money/bignumber formatted-amount))
+                                 (money/with-precision (:decimals token)))
+            gas-amount (some-> (when-not (= :ETH (:symbol transaction))
+                                 (money/bignumber network-fee-eth))
+                               (money/with-precision 18))
 
-            total-fiat (some-> (token->fiat-conversion prices token fiat-currency total-eth)
-                               (money/with-precision 2))
-
-            #_fee-fiat-amount
-            #_(some-> (token->fiat-conversion prices token fiat-currency formated-amount)
-                      (money/with-precision 2))]
+            total-fiat (some-> (token->fiat-conversion prices token fiat-currency total-amount)
+                               (money/with-precision 2))]
         [wallet.components/simple-screen {:avoid-keyboard? (not modal?)
                                           :status-bar-type (if modal? :modal-wallet :wallet)}
-         [toolbar modal? "Send amount"]
-         [react/view {:style {:flex 1
+         [toolbar flow (i18n/label :t/send-amount) (:public-key contact)]
+         [react/view {:style {:flex             1
                               :border-top-width 1
                               :border-top-color colors/white-light-transparent}}
           (when (optimal-gas-present? @tx-atom)
-            [slide-up-modal {:anim-ref #(reset! network-fees-modal-ref %)
+            [slide-up-modal {:anim-ref       #(reset! network-fees-modal-ref %)
                              :swipe-dismiss? true}
              [custom-gas-input-panel
               (-> (select-keys @tx-atom [:gas :gas-price :optimal-gas :optimal-gas-price])
@@ -1125,170 +1234,122 @@ Example:
                                 (close-network-fees!))))]])
           [react/text {:style {:margin-top 18
                                :text-align :center
-                               :font-size 15
-                               :color colors/white-transparent}}
-           "Recipient"]
+                               :font-size  15
+                               :color      colors/white-transparent}}
+           (i18n/label :t/recipient)]
           [react/view
            (when contact
-             [react/view {:style {:margin-top 10
-                                  :flex-direction :row
+             [react/view {:style {:margin-top      10
+                                  :flex-direction  :row
                                   :justify-content :center}}
               [photos/photo (:photo-path contact) {:size list.styles/image-size}]])
-           [react/text {:style {:color colors/white
+           [react/text {:style {:color             colors/white
                                 :margin-horizontal 24
-                                :margin-top 10
-                                :line-height 22
-                                :font-size 15
-                                :text-align :center}}
+                                :margin-top        10
+                                :line-height       22
+                                :font-size         15
+                                :text-align        :center}}
             (ethereum/normalized-address (:to transaction))]]
           [react/text {:style {:margin-top 18
-                               :font-size 15
+                               :font-size  15
                                :text-align :center
-                               :color colors/white-transparent}}
-           "Amount"]
-          [react/view {:style {:flex-direction :row
-                               :align-items :center
-                               :margin-top 10
+                               :color      colors/white-transparent}}
+           (i18n/label :t/amount)]
+          [react/view {:style {:flex-direction    :row
+                               :align-items       :center
+                               :margin-top        10
                                :margin-horizontal 24}}
-           [react/text {:style {:color colors/white
-                                :font-size 15}} "Sending"]
+           [react/text {:style {:color     colors/white
+                                :font-size 15}} (i18n/label :t/sending)]
            [react/view {:style {:flex 1}}
-            [react/text {:style {:color colors/white
+            [react/text {:style {:color       colors/white
                                  :line-height 21
-                                 :font-size 15
+                                 :font-size   15
                                  :font-weight "500"
-                                 :text-align :right}}
+                                 :text-align  :right}}
              amount-str]
-            [react/text {:style {:color colors/white-transparent
+            [react/text {:style {:color       colors/white-transparent
                                  :line-height 21
-                                 :font-size 15
-                                 :text-align :right}}
+                                 :font-size   15
+                                 :text-align  :right}}
              (str "~ " (:symbol fiat-currency "$")  fiat-amount " " (:code fiat-currency))]]]
           [react/view {:style {:margin-horizontal 24
-                               :margin-top 10
-                               :padding-top 10
-                               :border-top-width 1
-                               :border-top-color colors/white-light-transparent}}
+                               :margin-top        10
+                               :padding-top       10
+                               :border-top-width  1
+                               :border-top-color  colors/white-light-transparent}}
            [react/view {:style {:flex-direction :row
-                                :align-items :center}}
+                                :align-items    :center}}
             [react/touchable-highlight {:on-press #(open-network-fees!)
-                                        :style {:background-color colors/black-transparent
-                                                :padding-horizontal 16
-                                                :padding-vertical 9
-                                                :border-radius 8}}
+                                        :style    {:background-color   colors/black-transparent
+                                                   :padding-horizontal 16
+                                                   :padding-vertical   9
+                                                   :border-radius      8}}
              [react/view {:style {:flex-direction :row
-                                  :align-items :center}}
-              [react/text {:style {:color colors/white
+                                  :align-items    :center}}
+              [react/text {:style {:color         colors/white
                                    :padding-right 10
-                                   :font-size 15}} "Network fee"]
+                                   :font-size     15}} (i18n/label :t/network-fee)]
               [vector-icons/icon :icons/settings {:color colors/white}]]]
             [react/view {:style {:flex 1}}
-             [react/text {:style {:color colors/white
+             [react/text {:style {:color       colors/white
                                   :line-height 21
-                                  :font-size 15
+                                  :font-size   15
                                   :font-weight "500"
-                                  :text-align :right}}
-              (str network-fee-eth " " (name (:symbol native-currency)))]
-             [react/text {:style {:color colors/white-transparent
+                                  :text-align  :right}}
+              (str network-fee-eth " " (wallet.utils/display-symbol native-currency))]
+             [react/text {:style {:color       colors/white-transparent
                                   :line-height 21
-                                  :font-size 15
-                                  :text-align :right}}
+                                  :font-size   15
+                                  :text-align  :right}}
               (str "~ "  network-fee-fiat " " (:code fiat-currency))]]]]
-          [react/view {:style {:background-color colors/white
-                               :border-top-left-radius 8
-                               :border-top-right-radius 8
-                               :position :absolute
-                               :left 0
-                               :right 0
-                               :bottom 0}}
-           [react/text {:style {:color colors/black
-                                :font-size 15
-                                :line-height 22
-                                :margin-top 23
-                                :text-align :center}}
-            "Total"]
-           [react/text {:style {:color colors/black
-                                :margin-top 4
-                                :font-weight :bold
-                                :font-size 22
-                                :line-height 28
-                                :text-align :center}}
-            (str total-eth " " (name (:symbol native-currency)))]
-           [react/text {:style {:color colors/gray
-                                :text-align :center
-                                :margin-top 3
-                                :line-height 21
-                                :font-size 15}}
-            (str "~ " (:symbol fiat-currency "$") total-fiat)]
-           [react/view {:style {:flex-direction :row
-                                :justify-content :center
-                                :padding-top 16
-                                :padding-bottom 24}}
-            [react/touchable-highlight
-             {:on-press (fn [] #_TODO)
-              :style {:padding-horizontal 39
-                      :padding-vertical 12
-                      :border-radius 8
-                      :background-color colors/blue-light}}
-             [react/text {:style {:font-size 15
-                                  :line-height 22
-                                  :color colors/blue}}
-              "Confirm"]]]]
-
-          #_[react/text "Here we are"]]]))))
+          [static-modal
+           [confirm-and-sign {:transaction     transaction
+                              :contact         contact
+                              :total-amount    total-amount
+                              :gas-amount      gas-amount
+                              :native-currency native-currency
+                              :fiat-currency   fiat-currency
+                              :total-fiat      total-fiat
+                              :all-tokens      all-tokens
+                              :chain           chain
+                              :flow            flow}]]]]))))
 
 (defview txn-overview []
-  (letsubs [{:keys [transaction modal? contact]}
-            [:get-screen-params :wallet-txn-overview]
-            balance [:balance]
-            prices  [:prices]
-            network [:account/network]
-            all-tokens [:wallet/all-tokens]
-            fiat-currency [:wallet/currency]
-            chain                        (ethereum/network->chain-keyword network)
-            native-currency              (tokens/native-currency chain)]
-   ;; TODO look up contact don't pass it forward        
-    (let [token (tokens/asset-for
-                 all-tokens
-                 (ethereum/network->chain-keyword network) (:symbol symbol))]
-      [transaction-overview {:transaction transaction
-                             :modal? modal?
-                             :contact contact
-                             :prices prices
-                             :network network
-                             :token token
+  (letsubs [{:keys [transaction flow contact]} [:get-screen-params :wallet-txn-overview]
+            prices                             [:prices]
+            network                            [:account/network]
+            all-tokens                         [:wallet/all-tokens]
+            fiat-currency                      [:wallet/currency]]
+    (let [chain           (ethereum/network->chain-keyword network)
+          native-currency (tokens/native-currency chain)
+          token           (tokens/asset-for all-tokens
+                                            (ethereum/network->chain-keyword network) (:symbol transaction))]
+      [transaction-overview {:transaction     transaction
+                             :flow            flow
+                             :contact         contact
+                             :prices          prices
+                             :network         network
+                             :token           token
                              :native-currency native-currency
-                             :fiat-currency fiat-currency}])))
+                             :fiat-currency   fiat-currency
+                             :all-tokens      all-tokens
+                             :chain           chain}])))
 
 ;; MAIN SEND TRANSACTION VIEW
-(defn- send-transaction-view [{:keys [scroll] :as opts}]
-  (let [amount-input (atom nil)
-        handler      (fn [_]
-                       (when (and scroll @scroll @amount-input
-                                  (.isFocused @amount-input))
-                         (log/debug "Amount field focused, scrolling down")
-                         (.scrollToEnd @scroll)))]
-    (reagent/create-class
-     {:component-will-mount (fn [_]
-                              ;;NOTE(goranjovic): keyboardDidShow is for android and keyboardWillShow for ios
-                              (.addListener react/keyboard "keyboardDidShow" handler)
-                              (.addListener react/keyboard "keyboardWillShow" handler))
-      :reagent-render       (fn [opts] [choose-address-contact (assoc opts :amount-input amount-input)])})))
+(defn- send-transaction-view [_opts]
+  (reagent/create-class
+   {:reagent-render (fn [opts] [choose-address-contact opts])}))
 
 ;; SEND TRANSACTION FROM WALLET (CHAT)
 (defview send-transaction []
   (letsubs [transaction    [:wallet.send/transaction]
-            advanced?      [:wallet.send/advanced?]
             network        [:account/network]
-            scroll         (atom nil)
             network-status [:network-status]
             all-tokens     [:wallet/all-tokens]
             contacts       [:contacts/all-added-people-contacts]]
     [send-transaction-view {:modal?         false
-                            ;; TODO only send gas and gas-price when they are custom
                             :transaction    (dissoc transaction :gas :gas-price)
-                            :scroll         scroll
-                            :advanced?      advanced?
                             :network        network
                             :all-tokens     all-tokens
                             :contacts       contacts
@@ -1296,141 +1357,22 @@ Example:
 
 ;; SEND TRANSACTION FROM DAPP
 (defview send-transaction-modal []
-  (letsubs [transaction    [:wallet.send/transaction]
-            advanced?      [:wallet.send/advanced?]
-            network        [:account/network]
-            scroll         (atom nil)
-            network-status [:network-status]
-            all-tokens     [:wallet/all-tokens]]
-    (if transaction
-      [send-transaction-view {:modal?         true
-                              :transaction    transaction
-                              :scroll         scroll
-                              :advanced?      advanced?
-                              :network        network
-                              :all-tokens     all-tokens
-                              :network-status network-status}]
-      [react/view wallet.styles/wallet-modal-container
-       [react/view components.styles/flex
-        [status-bar/status-bar {:type :modal-wallet}]
-        [toolbar true (i18n/label :t/send-transaction)]
-        [react/i18n-text {:style styles/empty-text
-                          :key   :unsigned-transaction-expired}]]])))
-
-(defview password-input-panel [message-label spinning?]
-  (letsubs [account         [:account/account]
-            wrong-password? [:wallet.send/wrong-password?]
-            signing-phrase  (:signing-phrase @account)
-            bottom-value    (animation/create-value -250)
-            opacity-value   (animation/create-value 0)]
-    {:component-did-mount #(send.animations/animate-sign-panel opacity-value bottom-value)}
-    [react/animated-view {:style (styles/animated-sign-panel bottom-value)}
-     (when wrong-password?
-       [tooltip/tooltip (i18n/label :t/wrong-password) styles/password-error-tooltip])
-     [react/animated-view {:style (styles/sign-panel opacity-value)}
-      [react/view styles/spinner-container
-       (when spinning?
-         [react/activity-indicator {:animating true
-                                    :size      :large}])]
-      [react/view styles/signing-phrase-container
-       [react/text {:style               styles/signing-phrase
-                    :accessibility-label :signing-phrase-text}
-        signing-phrase]]
-      [react/i18n-text {:style styles/signing-phrase-description :key message-label}]
-      [react/view {:style                       styles/password-container
-                   :important-for-accessibility :no-hide-descendants}
-       [react/text-input
-        {:auto-focus             true
-         :secure-text-entry      true
-         :placeholder            (i18n/label :t/enter-password)
-         :placeholder-text-color colors/gray
-         :on-change-text         #(re-frame/dispatch [:wallet.send/set-password (security/mask-data %)])
-         :style                  styles/password
-         :accessibility-label    :enter-password-input
-         :auto-capitalize        :none}]]]]))
-
-;; "Cancel" and "Sign Transaction >" or "Sign >" buttons, signing with password
-(defview enter-password-buttons [spinning? cancel-handler sign-handler sign-label]
-  (letsubs [sign-enabled? [:wallet.send/sign-password-enabled?]
-            network-status [:network-status]]
-    [bottom-buttons/bottom-buttons
-     styles/sign-buttons
-     [button/button {:style               components.styles/flex
-                     :on-press            cancel-handler
-                     :accessibility-label :cancel-button}
-      (i18n/label :t/cancel)]
-     [button/button {:style               (wallet.styles/button-container sign-enabled?)
-                     :on-press            sign-handler
-                     :disabled?           (or spinning?
-                                              (not sign-enabled?)
-                                              (= :offline network-status))
-                     :accessibility-label :sign-transaction-button}
-      (i18n/label sign-label)
-      [vector-icons/icon :icons/forward {:color colors/white}]]]))
-
-;; "Sign Transaction >" button
-(defn- sign-transaction-button [amount-error to amount sufficient-funds? sufficient-gas? modal? online?]
-  (let [sign-enabled? (and (nil? amount-error)
-                           (or modal? (not (empty? to))) ;;NOTE(goranjovic) - contract creation will have empty `to`
-                           (not (nil? amount))
-                           sufficient-funds?
-                           sufficient-gas?
-                           online?)]
-    [bottom-buttons/bottom-buttons
-     styles/sign-buttons
-     [react/view]
-     [button/button {:style               components.styles/flex
-                     :disabled?           (not sign-enabled?)
-                     :on-press            #(re-frame/dispatch [:set-in
-                                                               [:wallet :send-transaction :show-password-input?]
-                                                               true])
-                     :text-style          {:color :white}
-                     :accessibility-label :sign-transaction-button}
-      (i18n/label :t/transactions-sign-transaction)
-      [vector-icons/icon :icons/forward {:color (if sign-enabled? colors/white colors/white-light-transparent)}]]]))
-
-(defn- render-send-transaction-view [{:keys [modal? transaction scroll advanced? network all-tokens amount-input network-status]}]
-  (let [{:keys [amount amount-text amount-error asset-error show-password-input? to to-name sufficient-funds?
-                sufficient-gas? in-progress? from-chat? symbol]} transaction
-        chain                        (ethereum/network->chain-keyword network)
-        native-currency              (tokens/native-currency chain)
-        {:keys [decimals] :as token} (tokens/asset-for all-tokens chain symbol)
-        online? (= :online network-status)]
-    [wallet.components/simple-screen {:avoid-keyboard? (not modal?)
-                                      :status-bar-type (if modal? :modal-wallet :wallet)}
-     [toolbar modal? (i18n/label :t/send-transaction)]
-     [react/view components.styles/flex
-      [common/network-info {:text-color :white}]
-      [react/scroll-view {:keyboard-should-persist-taps :always
-                          :ref                          #(reset! scroll %)
-                          :on-content-size-change       #(when (and (not modal?) scroll @scroll)
-                                                           (.scrollToEnd @scroll))}
-       (when-not online?
-         [wallet.main.views/snackbar :t/error-cant-send-transaction-offline])
-       [react/view styles/send-transaction-form
-        [components/recipient-selector {:disabled? (or from-chat? modal?)
-                                        :address   to
-                                        :name      to-name
-                                        :modal?    modal?}]
-        [components/asset-selector {:disabled? (or from-chat? modal?)
-                                    :error     asset-error
-                                    :type      :send
-                                    :symbol    symbol}]
-        [components/amount-selector {:disabled?     (or from-chat? modal?)
-                                     :error         (or amount-error
-                                                        (when-not sufficient-funds? (i18n/label :t/wallet-insufficient-funds))
-                                                        (when-not sufficient-gas? (i18n/label :t/wallet-insufficient-gas)))
-                                     :amount        amount
-                                     :amount-text   amount-text
-                                     :input-options {:on-change-text #(re-frame/dispatch [:wallet.send/set-and-validate-amount % symbol decimals])
-                                                     :ref            (partial reset! amount-input)}} token]
-        [advanced-options advanced? native-currency transaction scroll]]]
-      (if show-password-input?
-        [enter-password-buttons in-progress?
-         #(re-frame/dispatch [:wallet/cancel-entering-password])
-         #(re-frame/dispatch [:wallet/send-transaction])
-         :t/transactions-sign-transaction]
-        [sign-transaction-button amount-error to amount sufficient-funds? sufficient-gas? modal? online?])
-      (when show-password-input?
-        [password-input-panel :t/signing-phrase-description in-progress?])
-      (when in-progress? [react/view styles/processing-view])]]))
+  (letsubs [{:keys [transaction flow contact]} [:get-screen-params :wallet-send-transaction-modal]
+            prices                             [:prices]
+            network                            [:account/network]
+            all-tokens                         [:wallet/all-tokens]
+            fiat-currency                      [:wallet/currency]]
+    (let [chain           (ethereum/network->chain-keyword network)
+          native-currency (tokens/native-currency chain)
+          token           (tokens/asset-for all-tokens
+                                            (ethereum/network->chain-keyword network) (:symbol transaction))]
+      [transaction-overview {:transaction     transaction
+                             :flow            flow
+                             :contact         contact
+                             :prices          prices
+                             :network         network
+                             :token           token
+                             :native-currency native-currency
+                             :fiat-currency   fiat-currency
+                             :all-tokens      all-tokens
+                             :chain           chain}])))
