@@ -52,6 +52,7 @@
             [status-im.ui.screens.pairing.views :refer [installations]]
             [status-im.ui.screens.bootnodes-settings.edit-bootnode.views :refer [edit-bootnode]]
             [status-im.ui.screens.currency-settings.views :refer [currency-settings]]
+            [status-im.ui.screens.keycard-settings.views :refer [keycard-settings]]
             [status-im.ui.screens.help-center.views :refer [help-center]]
             [status-im.ui.screens.browser.views :refer [browser]]
             [status-im.ui.screens.add-new.open-dapp.views :refer [open-dapp dapp-description]]
@@ -323,6 +324,7 @@
                    :log-level-settings               log-level-settings
                    :fleet-settings                   fleet-settings
                    :currency-settings                currency-settings
+                   :keycard-settings                 keycard-settings
                    :backup-seed                      backup-seed
                    :login                            login
                    :create-account                   create-account
