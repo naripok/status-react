@@ -46,3 +46,26 @@
 (re-frame/reg-fx
  :hardwallet/generate-and-load-key
  card/generate-and-load-key)
+
+(re-frame/reg-fx
+ :hardwallet/verify-pin
+ card/verify-pin)
+
+(re-frame/reg-fx
+ :hardwallet/change-pin
+ card/change-pin)
+
+(re-frame/reg-fx
+ :hardwallet/persist-pairing
+ (fn [pairing]
+   (.. js-dependencies/react-native
+       -AsyncStorage
+       (setItem "status-keycard-pairing" pairing))))
+
+(re-frame/reg-fx
+ :hardwallet/retrieve-pairing
+ (fn []
+   (.. js-dependencies/react-native
+       -AsyncStorage
+       (getItem "status-keycard-pairing")
+       (then #(re-frame/dispatch [:hardwallet.callback/on-retrieve-pairing-success %])))))

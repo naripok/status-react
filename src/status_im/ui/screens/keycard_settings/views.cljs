@@ -7,7 +7,34 @@
             [status-im.ui.components.toolbar.view :as toolbar]
             [status-im.react-native.resources :as resources]
             [status-im.ui.components.icons.vector-icons :as vector-icons]
-            [status-im.ui.components.colors :as colors]))
+            [status-im.ui.components.colors :as colors]
+            [status-im.ui.screens.hardwallet.components :as components]
+            [status-im.ui.screens.hardwallet.pin.views :as pin.views]))
+
+(defview change-pin []
+  (letsubs [pin [:hardwallet/pin]
+            step [:hardwallet/pin-enter-step]
+            status [:hardwallet/pin-status]
+            error-label [:hardwallet/pin-error-label]]
+    [react/keyboard-avoiding-view {:flex 1}
+     [react/view {:flex             1
+                  :background-color colors/white}
+      [react/view {:flex-direction  :column
+                   :flex            1
+                   :align-items     :center
+                   :justify-content :space-between}
+       [components/maintain-card nil]
+       [pin.views/pin-view {:pin               pin
+                            :title-label       (case step
+                                                 :current :t/change-pin
+                                                 :original :t/create-pin
+                                                 :confirmation :t/repeat-pin)
+                            :description-label (case step
+                                                 :current :t/change-pin-description
+                                                 :t/new-pin-description)
+                            :step              step
+                            :status            status
+                            :error-label       error-label}]]]]))
 
 (defn- action-row [{:keys [icon label on-press color-theme]}]
   [react/touchable-highlight
@@ -56,16 +83,16 @@
                  :flex-direction :column}
      [action-row {:icon     :icons/info
                   :label    :t/help-capitalized
-                  :on-press #()}]
+                  :on-press #(.openURL react/linking "https://hardwallet.status.im")}]
      [action-row {:icon     :icons/add
                   :label    :t/change-pin
-                  :on-press #()}]
+                  :on-press #(re-frame/dispatch [:keycard-settings.ui/change-pin-pressed])}]
      [action-row {:icon     :icons/close
                   :label    :t/unpair-card
-                  :on-press #()}]]
+                  :on-press #(re-frame/dispatch [:keycard-settings.ui/unpair-card-pressed])}]]
     [react/view {:margin-bottom 20
                  :margin-left   16}
      [action-row {:icon        :icons/logout
                   :color-theme :red
                   :label       :t/reset-card
-                  :on-press    #()}]]]])
+                  :on-press    #(re-frame/dispatch [:keycard-settings.ui/reset-card-pressed])}]]]])

@@ -90,3 +90,19 @@
         (generateAndLoadKey mnemonic pairing pin)
         (then #(re-frame/dispatch [:hardwallet.callback/on-generate-and-load-key-success %]))
         (catch #(re-frame/dispatch [:hardwallet.callback/on-generate-and-load-key-error (error-object->map %)])))))
+
+(defn verify-pin
+  [{:keys [pin pairing]}]
+  (when (and pairing pin)
+    (.. keycard
+        (verifyPin pairing pin)
+        (then #(re-frame/dispatch [:hardwallet.callback/on-verify-pin-success %]))
+        (catch #(re-frame/dispatch [:hardwallet.callback/on-verify-pin-error (error-object->map %)])))))
+
+(defn change-pin
+  [{:keys [current-pin new-pin pairing]}]
+  (when (and pairing current-pin new-pin)
+    (.. keycard
+        (changePin pairing current-pin new-pin)
+        (then #(re-frame/dispatch [:hardwallet.callback/on-change-pin-success %]))
+        (catch #(re-frame/dispatch [:hardwallet.callback/on-change-pin-error (error-object->map %)])))))

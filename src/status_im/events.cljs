@@ -833,6 +833,12 @@
    {:hardwallet/get-application-info nil}))
 
 (handlers/register-handler-fx
+ :hardwallet.callback/on-retrieve-pairing-success
+ (fn [{:keys [db]} [_ pairing]]
+   (when-not (empty? pairing)
+     {:db (assoc-in db [:hardwallet :secrets :pairing] pairing)})))
+
+(handlers/register-handler-fx
  :hardwallet.callback/on-register-card-events
  (fn [cofx [_ listeners]]
    (hardwallet/on-register-card-events cofx listeners)))
@@ -909,6 +915,26 @@
  :hardwallet.callback/on-generate-and-load-key-error
  (fn [cofx [_ error]]
    (hardwallet/on-generate-and-load-key-error cofx error)))
+
+(handlers/register-handler-fx
+ :hardwallet.callback/on-verify-pin-success
+ (fn [cofx _]
+   (hardwallet/on-verify-pin-success cofx)))
+
+(handlers/register-handler-fx
+ :hardwallet.callback/on-verify-pin-error
+ (fn [cofx [_ error]]
+   (hardwallet/on-verify-pin-error cofx error)))
+
+(handlers/register-handler-fx
+ :hardwallet.callback/on-change-pin-success
+ (fn [cofx _]
+   (hardwallet/on-change-pin-success cofx)))
+
+(handlers/register-handler-fx
+ :hardwallet.callback/on-change-pin-error
+ (fn [cofx [_ error]]
+   (hardwallet/on-change-pin-error cofx error)))
 
 (handlers/register-handler-fx
  :hardwallet.ui/status-hardwallet-option-pressed
@@ -1072,6 +1098,31 @@
  :hardwallet.ui/error-button-pressed
  (fn [cofx _]
    (hardwallet/error-button-pressed cofx)))
+
+(handlers/register-handler-fx
+ :keycard-settings.ui/change-pin-pressed
+ (fn [cofx _]
+   (hardwallet/change-pin-pressed cofx)))
+
+(handlers/register-handler-fx
+ :keycard-settings.ui/unpair-card-pressed
+ (fn [cofx _]
+   (hardwallet/unpair-card-pressed cofx)))
+
+(handlers/register-handler-fx
+ :keycard-settings.ui/reset-card-pressed
+ (fn [cofx _]
+   (hardwallet/reset-card-pressed cofx)))
+
+(handlers/register-handler-fx
+ :keycard-settings.ui/pin-changed-dialog-button-pressed
+ (fn [cofx _]
+   (navigation/navigate-to-cofx cofx :keycard-settings nil)))
+
+(handlers/register-handler-fx
+ :hardwallet/navigate-to-change-pin-screen
+ (fn [cofx _]
+   (hardwallet/navigate-to-change-pin-screen cofx)))
 
 ;; browser module
 

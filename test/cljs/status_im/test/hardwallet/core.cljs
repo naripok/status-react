@@ -27,7 +27,7 @@
     (is (= {:db                   {:hardwallet {:pin {:original     [1 2 3 4 5 6]
                                                       :confirmation [1 2 3 4 5 6]
                                                       :enter-step   :confirmation
-                                                      :status       :validating}}}}
+                                                      :status       :verifying}}}}
            (hardwallet/process-pin-input {:db {:hardwallet {:pin {:original     [1 2 3 4 5 6]
                                                                   :confirmation [1 2 3 4 5]
                                                                   :enter-step   :confirmation}}}}
