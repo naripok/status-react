@@ -68,11 +68,15 @@
 
 (fx/defn change-pin-pressed
   [{:keys [db] :as cofx}]
-  (fx/merge cofx
-            {:db (-> db
-                     (assoc-in [:hardwallet :on-card-connected] :hardwallet/navigate-to-change-pin-screen)
-                     (assoc-in [:hardwallet :pin :enter-step] :current))}
-            (navigation/navigate-to-cofx :hardwallet-connect nil)))
+  (let [card-connected? (get-in db [:hardwallet :card-connected?])]
+    (fx/merge cofx
+              {:db (-> db
+                       (assoc-in [:hardwallet :on-card-connected] :hardwallet/navigate-to-change-pin-screen)
+                       (assoc-in [:hardwallet :pin :enter-step] :current)
+                       (assoc-in [:hardwallet :pin :current] []))}
+              (if card-connected?
+                (navigation/navigate-to-cofx :change-pin nil)
+                (navigation/navigate-to-cofx :hardwallet-connect nil)))))
 
 (fx/defn unpair-card-pressed [cofx])
 
@@ -135,10 +139,12 @@
 (fx/defn on-change-pin-success
   [{:keys [db] :as cofx}]
   (fx/merge cofx
-            {:db               (assoc-in db [:hardwallet :pin] {:status      nil
-                                                                :error-label nil})
+            {:db               (-> db
+                                   (assoc-in [:hardwallet :on-card-connected] nil)
+                                   (assoc-in [:hardwallet :pin] {:status      nil
+                                                                 :error-label nil}))
              :utils/show-popup {:title      ""
-                                :content    "PIN has been changed"
+                                :content    (i18n/label :t/pin-changed)
                                 :on-dismiss #(re-frame/dispatch [:keycard-settings.ui/pin-changed-dialog-button-pressed])}}))
 
 (fx/defn on-change-pin-error

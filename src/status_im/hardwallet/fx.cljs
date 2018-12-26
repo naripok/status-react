@@ -1,7 +1,8 @@
 (ns status-im.hardwallet.fx
   (:require [re-frame.core :as re-frame]
             [status-im.hardwallet.card :as card]
-            [status-im.react-native.js-dependencies :as js-dependencies]))
+            [status-im.react-native.js-dependencies :as js-dependencies]
+            [status-im.utils.datetime :as utils.datetime]))
 
 (re-frame/reg-fx
  :hardwallet/get-application-info
@@ -60,7 +61,10 @@
  (fn [pairing]
    (.. js-dependencies/react-native
        -AsyncStorage
-       (setItem "status-keycard-pairing" pairing))))
+       (setItem "status-keycard-pairing"
+                (js/JSON.stringify
+                 #js {"pairing"   pairing
+                      "paired-on" (utils.datetime/timestamp)})))))
 
 (re-frame/reg-fx
  :hardwallet/retrieve-pairing
@@ -68,4 +72,7 @@
    (.. js-dependencies/react-native
        -AsyncStorage
        (getItem "status-keycard-pairing")
-       (then #(re-frame/dispatch [:hardwallet.callback/on-retrieve-pairing-success %])))))
+       (then #(re-frame/dispatch [:hardwallet.callback/on-retrieve-pairing-success
+                                  (-> %
+                                      (js/JSON.parse)
+                                      (js->clj :keywordize-keys true))])))))

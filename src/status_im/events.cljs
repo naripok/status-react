@@ -834,9 +834,9 @@
 
 (handlers/register-handler-fx
  :hardwallet.callback/on-retrieve-pairing-success
- (fn [{:keys [db]} [_ pairing]]
-   (when-not (empty? pairing)
-     {:db (assoc-in db [:hardwallet :secrets :pairing] pairing)})))
+ (fn [{:keys [db]} [_ pairing-data]]
+   {:db (update-in db [:hardwallet :secrets] merge (select-keys pairing-data
+                                                                [:pairing :paired-on]))}))
 
 (handlers/register-handler-fx
  :hardwallet.callback/on-register-card-events

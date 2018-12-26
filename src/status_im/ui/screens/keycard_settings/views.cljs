@@ -62,37 +62,39 @@
       (i18n/label label)]]]])
 
 (defview keycard-settings []
-  [react/view {:flex 1}
-   [status-bar/status-bar]
-   [toolbar/simple-toolbar
-    (i18n/label :t/status-keycard)]
-   [react/view {:flex             1
-                :background-color :white}
-    [react/view {:margin-top  47
-                 :flex        1
-                 :align-items :center}
-     [react/image {:source (:hardwallet-card resources/ui)
-                   :style  {:width  255
-                            :height 160}}]
-     [react/view {:margin-top 27}
-      [react/text
-       (i18n/label :t/linked-on {:date "25/12/2018"})]]]
-    [react/view {:margin-left    16
-                 :flex           1
-                 :width          "90%"
-                 :flex-direction :column}
-     [action-row {:icon     :icons/info
-                  :label    :t/help-capitalized
-                  :on-press #(.openURL react/linking "https://hardwallet.status.im")}]
-     [action-row {:icon     :icons/add
-                  :label    :t/change-pin
-                  :on-press #(re-frame/dispatch [:keycard-settings.ui/change-pin-pressed])}]
-     [action-row {:icon     :icons/close
-                  :label    :t/unpair-card
-                  :on-press #(re-frame/dispatch [:keycard-settings.ui/unpair-card-pressed])}]]
-    [react/view {:margin-bottom 20
-                 :margin-left   16}
-     [action-row {:icon        :icons/logout
-                  :color-theme :red
-                  :label       :t/reset-card
-                  :on-press    #(re-frame/dispatch [:keycard-settings.ui/reset-card-pressed])}]]]])
+  (letsubs [paired-on [:keycard-paired-on]]
+    [react/view {:flex 1}
+     [status-bar/status-bar]
+     [toolbar/simple-toolbar
+      (i18n/label :t/status-keycard)]
+     [react/view {:flex             1
+                  :background-color :white}
+      [react/view {:margin-top  47
+                   :flex        1
+                   :align-items :center}
+       [react/image {:source (:hardwallet-card resources/ui)
+                     :style  {:width  255
+                              :height 160}}]
+       (when paired-on
+         [react/view {:margin-top 27}
+          [react/text
+           (i18n/label :t/linked-on {:date paired-on})]])]
+      [react/view {:margin-left    16
+                   :flex           1
+                   :width          "90%"
+                   :flex-direction :column}
+       [action-row {:icon     :icons/info
+                    :label    :t/help-capitalized
+                    :on-press #(.openURL react/linking "https://hardwallet.status.im")}]
+       [action-row {:icon     :icons/add
+                    :label    :t/change-pin
+                    :on-press #(re-frame/dispatch [:keycard-settings.ui/change-pin-pressed])}]
+       [action-row {:icon     :icons/close
+                    :label    :t/unpair-card
+                    :on-press #(re-frame/dispatch [:keycard-settings.ui/unpair-card-pressed])}]]
+      [react/view {:margin-bottom 20
+                   :margin-left   16}
+       [action-row {:icon        :icons/logout
+                    :color-theme :red
+                    :label       :t/reset-card
+                    :on-press    #(re-frame/dispatch [:keycard-settings.ui/reset-card-pressed])}]]]]))

@@ -814,6 +814,7 @@
     "create-pin-description": "You'll need your card + this PIN to log in and to confirm transactions",
     "repeat-pin": "Repeat new PIN",
     "pin-mismatch": "PIN does not match",
+    "pin-changed": "PIN has been changed",
     "reset-card": "Reset card",
     "unpair-card": "Unpair card",
     "pair-card": "pair card",
