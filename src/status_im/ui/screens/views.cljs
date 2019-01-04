@@ -82,7 +82,7 @@
         {:on-will-focus
          (fn []
            (log/debug :on-will-focus view-id)
-           (re-frame/dispatch [:set :view-id view-id]))}]])))
+           (re-frame/dispatch [:screens/on-will-focus view-id]))}]])))
 
 (defn wrap-modal [modal-view component]
   (fn []

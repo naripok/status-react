@@ -1150,11 +1150,6 @@
    (hardwallet/unpair-card-confirmed cofx)))
 
 (handlers/register-handler-fx
- :keycard-settings.ui/settings-screen-did-mount
- (fn [cofx _]
-   (hardwallet/settings-screen-did-mount cofx)))
-
-(handlers/register-handler-fx
  :hardwallet/unpair
  (fn [cofx _]
    (hardwallet/unpair cofx)))
@@ -1369,6 +1364,11 @@
  :profile.ui/ens-names-button-pressed
  (fn [cofx]
    (browser/open-url cofx "names.statusnet.eth")))
+
+(handlers/register-handler-fx
+ :profile.ui/keycard-settings-button-pressed
+ (fn [cofx]
+   (hardwallet/navigate-to-keycard-settings cofx)))
 
 ;; transport module
 

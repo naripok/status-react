@@ -114,7 +114,7 @@
      (when config/hardwallet-enabled?
        [profile.components/settings-item {:label-kw            :t/status-keycard
                                           :accessibility-label :keycard-button
-                                          :action-fn           #(re-frame/dispatch [:navigate-to :keycard-settings])}])
+                                          :action-fn           #(re-frame/dispatch [:profile.ui/keycard-settings-button-pressed])}])
      [profile.components/settings-item {:label-kw            :t/notifications
                                         :accessibility-label :notifications-button
                                         :action-fn           #(.openURL react/linking "app-settings://notification/status-im")}]

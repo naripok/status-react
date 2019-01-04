@@ -25,6 +25,15 @@
                                 :content (i18n/label :t/keycard-unauthorized-operation)}}
             (navigation/navigate-to-cofx :keycard-settings nil)))
 
+(fx/defn navigate-to-keycard-settings
+  [{:keys [db] :as cofx}]
+  (fx/merge cofx
+            {:db (-> db
+                     (assoc-in [:hardwallet :pin :on-verified] nil)
+                     (assoc-in [:hardwallet :on-card-connected] nil)
+                     (assoc-in [:hardwallet :setup-step] nil))}
+            (navigation/navigate-to-cofx :keycard-settings nil)))
+
 (fx/defn navigate-to-enter-pin-screen
   [{:keys [db] :as cofx}]
   (let [keycard-instance-uid (get-in db [:hardwallet :application-info :instance-uid])
@@ -42,6 +51,13 @@
   (if (hardwallet-supported? cofx)
     (navigation/navigate-to-cofx cofx :hardwallet-authentication-method nil)
     (accounts.create/navigate-to-create-account-screen cofx)))
+
+(defn settings-screen-did-load
+  [{:keys [db]}]
+  {:db (-> db
+           (assoc-in [:hardwallet :pin :on-verified] nil)
+           (assoc-in [:hardwallet :on-card-connected] nil)
+           (assoc-in [:hardwallet :setup-step] nil))})
 
 (fx/defn on-register-card-events
   [{:keys [db]} listeners]
@@ -149,12 +165,6 @@
         pairing (get-in db [:hardwallet :secrets :pairing])]
     {:hardwallet/unpair {:pin     pin
                          :pairing pairing}}))
-
-(fx/defn settings-screen-did-mount
-  [{:keys [db]}]
-  {:db (-> db
-           (assoc-in [:hardwallet :on-card-connected] nil)
-           (assoc-in [:hardwallet :pin :on-verified] nil))})
 
 (fx/defn unpair-and-delete
   [{:keys [db]}]

@@ -122,7 +122,6 @@
   (letsubs [paired-on [:keycard-paired-on]
             puk-retry-counter [:hardwallet/puk-retry-counter]
             pairing [:hardwallet/pairing]]
-    {:component-did-mount #(re-frame/dispatch [:keycard-settings.ui/settings-screen-did-mount])}
     [react/view {:flex 1}
      [status-bar/status-bar]
      [toolbar/simple-toolbar
