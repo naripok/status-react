@@ -8,7 +8,6 @@
             [taoensso.timbre :as log]
             [status-im.i18n :as i18n]
             [status-im.accounts.create.core :as accounts.create]
-            [status-im.accounts.login.core :as accounts.login]
             [status-im.node.core :as node]))
 
 (defonce default-pin "000000")
@@ -17,6 +16,26 @@
   (and config/hardwallet-enabled?
        platform/android?
        (get-in db [:hardwallet :nfc-supported?])))
+
+(fx/defn unauthorized-operation
+  [{:keys [db] :as cofx}]
+  (fx/merge cofx
+            {:db (assoc-in db [:hardwallet :on-card-connected] nil)
+             :utils/show-popup {:title   ""
+                                :content (i18n/label :t/keycard-unauthorized-operation)}}
+            (navigation/navigate-to-cofx :keycard-settings nil)))
+
+(fx/defn navigate-to-enter-pin-screen
+  [{:keys [db] :as cofx}]
+  (let [keycard-instance-uid (get-in db [:hardwallet :application-info :instance-uid])
+        account-instance-uid (get-in db [:account/account :keycard-instance-uid])]
+    (if (or (nil? account-instance-uid)
+            (and keycard-instance-uid
+                 (= keycard-instance-uid account-instance-uid)))
+      (fx/merge cofx
+                {:db (assoc-in db [:hardwallet :pin :current] [])}
+                (navigation/navigate-to-cofx :enter-pin nil))
+      (unauthorized-operation cofx))))
 
 (fx/defn navigate-to-authentication-method
   [cofx]
@@ -71,12 +90,6 @@
   ;; login not implemented yet
 )
 
-(fx/defn navigate-to-enter-pin-screen
-  [{:keys [db] :as cofx}]
-  (fx/merge cofx
-            {:db (assoc-in db [:hardwallet :pin :current] [])}
-            (navigation/navigate-to-cofx :enter-pin nil)))
-
 (fx/defn change-pin-pressed
   [{:keys [db] :as cofx}]
   (let [card-connected? (get-in db [:hardwallet :card-connected?])
@@ -94,7 +107,7 @@
                                                      :error-label  nil
                                                      :on-verified  :hardwallet/proceed-to-change-pin}))}
               (if card-connected?
-                (navigation/navigate-to-cofx :enter-pin nil)
+                (navigate-to-enter-pin-screen)
                 (navigation/navigate-to-cofx :hardwallet-connect nil)))))
 
 (fx/defn proceed-to-change-pin
@@ -127,7 +140,7 @@
                                                      :error-label nil
                                                      :on-verified :hardwallet/unpair}))}
               (if card-connected?
-                (navigation/navigate-to-cofx :enter-pin nil)
+                (navigate-to-enter-pin-screen)
                 (navigation/navigate-to-cofx :hardwallet-connect nil)))))
 
 (fx/defn unpair
@@ -183,6 +196,16 @@
 (fx/defn reset-card-pressed [cofx]
   (navigation/navigate-to-cofx cofx :reset-card nil))
 
+(fx/defn delete-card
+  [{:keys [db] :as cofx}]
+  (let [keycard-instance-uid (get-in db [:hardwallet :application-info :instance-uid])
+        account-instance-uid (get-in db [:account/account :keycard-instance-uid])]
+    (if (or (nil? account-instance-uid)
+            (and keycard-instance-uid
+                 (= keycard-instance-uid account-instance-uid)))
+      {:hardwallet/delete nil}
+      (unauthorized-operation cofx))))
+
 (fx/defn reset-card-next-button-pressed
   [{:keys [db] :as cofx}]
   (let [card-connected? (get-in db [:hardwallet :card-connected?])
@@ -190,7 +213,7 @@
         pin-retry-counter (get-in db [:hardwallet :application-info :pin-retry-counter])
         enter-step (if (zero? pin-retry-counter) :puk :current)]
     (if (zero? puk-retry-counter)
-      {:hardwallet/delete nil}
+      (delete-card cofx)
       (fx/merge cofx
                 {:db (-> db
                          (assoc-in [:hardwallet :on-card-connected] :hardwallet/navigate-to-enter-pin-screen)
@@ -201,7 +224,7 @@
                                                        :error-label nil
                                                        :on-verified :hardwallet/unpair-and-delete}))}
                 (if card-connected?
-                  (navigation/navigate-to-cofx :enter-pin nil)
+                  (navigate-to-enter-pin-screen)
                   (navigation/navigate-to-cofx :hardwallet-connect nil))))))
 
 (fx/defn error-button-pressed [{:keys [db] :as cofx}]
@@ -258,7 +281,7 @@
                                                  :content (i18n/label :t/pin-unblocked-description {:pin default-pin})}
                :db                              (-> db
                                                     (update-in [:hardwallet :pin] merge {:status      nil
-                                                                                         :enter-step :current
+                                                                                         :enter-step  :current
                                                                                          :puk         nil
                                                                                          :error-label nil}))}
               (navigation/navigate-to-cofx :keycard-settings nil))))
@@ -590,6 +613,7 @@
                        (assoc-in [:hardwallet :wallet-address] wallet-address)
                        (assoc-in [:hardwallet :encryption-public-key] encryption-public-key)
                        (assoc-in [:hardwallet :keycard-instance-uid] keycard-instance-uid)
+                       (assoc-in [:hardwallet :setup-step] nil)
                        (assoc :node/on-ready :create-keycard-account)
                        (assoc :accounts/new-installation-id (random-guid-generator))
                        (update-in [:hardwallet :secrets] dissoc :mnemonic))}

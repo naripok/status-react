@@ -835,6 +835,7 @@
     "enter-pair-code-description": "Needed to link your card to this device",
     "no-pairing-slots-available": "No pairing slots are available.\n You could unpair the device\n that already paired with the card",
     "card-already-linked": "Card is already linked to another account",
+    "keycard-unauthorized-operation": "You're unauthorized to perform this operation.",
     "help": "help",
     "help-capitalized": "Help",
     "pairing-card": "Pairing card",
