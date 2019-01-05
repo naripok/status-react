@@ -52,7 +52,7 @@
             [status-im.ui.screens.pairing.views :refer [installations]]
             [status-im.ui.screens.bootnodes-settings.edit-bootnode.views :refer [edit-bootnode]]
             [status-im.ui.screens.currency-settings.views :refer [currency-settings]]
-            [status-im.ui.screens.keycard-settings.views :refer [keycard-settings enter-pin reset-card]]
+            [status-im.ui.screens.hardwallet.settings.views :refer [keycard-settings enter-pin reset-card]]
             [status-im.ui.screens.help-center.views :refer [help-center]]
             [status-im.ui.screens.browser.views :refer [browser]]
             [status-im.ui.screens.add-new.open-dapp.views :refer [open-dapp dapp-description]]

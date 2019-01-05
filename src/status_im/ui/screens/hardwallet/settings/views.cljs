@@ -1,4 +1,4 @@
-(ns status-im.ui.screens.keycard-settings.views
+(ns status-im.ui.screens.hardwallet.settings.views
   (:require-macros [status-im.utils.views :refer [defview letsubs]])
   (:require [re-frame.core :as re-frame]
             [status-im.i18n :as i18n]

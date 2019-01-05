@@ -1,4 +1,4 @@
-(ns status-im.ui.screens.keycard-settings.subs
+(ns status-im.ui.screens.hardwallet.settings.subs
   (:require [re-frame.core :as re-frame]
             [status-im.utils.datetime :as utils.datetime]))
 
