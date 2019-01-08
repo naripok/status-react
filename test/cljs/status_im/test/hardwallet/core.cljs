@@ -24,20 +24,24 @@
                                          6
                                          :original))))
   (testing "confirmation entered"
-    (is (= {:db                   {:hardwallet {:pin {:original     [1 2 3 4 5 6]
-                                                      :confirmation [1 2 3 4 5 6]
-                                                      :enter-step   :confirmation
-                                                      :status       :verifying}}}}
-           (hardwallet/process-pin-input {:db {:hardwallet {:pin {:original     [1 2 3 4 5 6]
-                                                                  :confirmation [1 2 3 4 5]
-                                                                  :enter-step   :confirmation}}}}
+    (is (= {:db                    {:hardwallet {:pin {:original     [1 2 3 4 5 6]
+                                                       :confirmation [1 2 3 4 5 6]
+                                                       :enter-step   :confirmation
+                                                       :status       :verifying}}}
+            :hardwallet/change-pin {:new-pin     "123456"
+                                    :current-pin ""
+                                    :pairing     nil}}
+           (hardwallet/process-pin-input {:db {:hardwallet {:pin     {:original     [1 2 3 4 5 6]
+                                                                      :confirmation [1 2 3 4 5]
+                                                                      :enter-step   :confirmation}}}}
                                          6
                                          :confirmation))))
+
   (testing "confirmation doesn't match"
     (is (= {:db {:hardwallet {:pin {:original     []
                                     :confirmation []
                                     :enter-step   :original
-                                    :error        :t/pin-mismatch
+                                    :error-label  :t/pin-mismatch
                                     :status       :error}}}}
            (hardwallet/process-pin-input {:db {:hardwallet {:pin {:original     [1 2 3 4 5 6]
                                                                   :confirmation [1 2 3 4 5]
