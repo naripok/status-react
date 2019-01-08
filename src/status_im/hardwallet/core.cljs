@@ -623,7 +623,6 @@
                        (assoc-in [:hardwallet :wallet-address] wallet-address)
                        (assoc-in [:hardwallet :encryption-public-key] encryption-public-key)
                        (assoc-in [:hardwallet :keycard-instance-uid] keycard-instance-uid)
-                       (assoc-in [:hardwallet :setup-step] nil)
                        (assoc :node/on-ready :create-keycard-account)
                        (assoc :accounts/new-installation-id (random-guid-generator))
                        (update-in [:hardwallet :secrets] dissoc :mnemonic))}
