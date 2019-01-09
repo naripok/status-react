@@ -16,9 +16,7 @@
            :right 0)
 
     (not platform/desktop?)
-    (assoc
-     :ios {:z-index 0}
-     :width window-width)))
+    (assoc :width window-width)))
 
 (def text
   {:color      :white
