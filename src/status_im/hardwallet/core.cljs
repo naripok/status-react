@@ -67,10 +67,11 @@
   [{:keys [db] :as cofx} info]
   (let [info' (js->clj info :keywordize-keys true)
         {:keys [pin-retry-counter puk-retry-counter]} info'
-        enter-step (if (zero? pin-retry-counter) :puk :current)]
+        enter-step (get-in db [:hardwallet :pin :enter-step])
+        enter-step' (if (zero? pin-retry-counter) :puk enter-step)]
     (fx/merge cofx
               {:db (-> db
-                       (assoc-in [:hardwallet :pin :enter-step] enter-step)
+                       (assoc-in [:hardwallet :pin :enter-step] enter-step')
                        (assoc-in [:hardwallet :application-info] info')
                        (assoc-in [:hardwallet :application-info :applet-installed?] true)
                        (assoc-in [:hardwallet :application-info-error] nil))}
