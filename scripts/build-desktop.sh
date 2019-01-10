@@ -61,6 +61,16 @@ function program_exists() {
   command -v "$program" >/dev/null 2>&1
 }
 
+function getRequiredVersion() {
+  local toolName=$1
+  local version=`grep "^$toolName" ./.TOOLVERSIONS | cut -d'=' -f2-`
+  if [ -z "$version" ]; then
+    exit 1
+  fi
+
+  echo $version
+}
+
 function joinPath() {
   if program_exists 'realpath'; then
     realpath -m "$1/$2"
@@ -127,7 +137,7 @@ function init() {
         fi
 
         echo "${RED}Conan package manager not found. Installing...${NC}"
-        pip3 install conan==1.9.0
+        pip3 install conan==$(getRequiredVersion conan)
       fi
 
       conan remote add --insert 0 -f status-im https://conan.status.im

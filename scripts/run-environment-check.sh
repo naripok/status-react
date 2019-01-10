@@ -6,8 +6,18 @@ YELLOW='\033[1;33m'
 NC='\033[0m'
 PLATFORM=""
 
-EXPECTED_NODE_VERSION="v10.14.0" # note the 'v' in front, that is how node does versioning
-EXPECTED_YARN_VERSION="1.13.0" # note the lack of 'v' in front. inconsistent. :(
+function getRequiredVersion() {
+  local toolName=$1
+  local version=`grep "^$toolName" ./.TOOLVERSIONS | cut -d'=' -f2-`
+  if [ -z "$version" ]; then
+    exit 1
+  fi
+
+  echo $version
+}
+
+EXPECTED_NODE_VERSION="v$(getRequiredVersion node)" # note the 'v' in front, that is how node does versioning
+EXPECTED_YARN_VERSION="$(getRequiredVersion yarn)" # note the lack of 'v' in front. inconsistent. :(
 
 function program_exists() {
   local program=$1
