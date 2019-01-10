@@ -285,6 +285,9 @@
 
 ;; realm functions
 
+(defn object-stored? [obj]
+  (and (not (nil? obj)) (.isValid obj)))
+
 (defn write [realm f]
   (.write realm f))
 
@@ -292,9 +295,15 @@
   ([realm schema-name obj]
    (create realm schema-name obj false))
   ([realm schema-name obj update?]
+   (create realm schema-name obj update? nil))
+  ([realm schema-name obj update? on-success]
    (let [obj-to-save (select-keys obj (keys (get-in entity->schemas
-                                                    [schema-name :properties])))]
-     (.create realm (name schema-name) (clj->js obj-to-save) update?))))
+                                                    [schema-name :properties])))
+         obj-in-realm (.create realm (name schema-name) (clj->js obj-to-save) update?)]
+     (when (and (not (nil? on-success))
+                (object-stored? obj-in-realm))
+       (on-success))
+     obj-in-realm)))
 
 (defn delete [realm obj]
   (.delete realm obj))

@@ -1,12 +1,12 @@
 (ns status-im.chat.core
   (:require [status-im.data-store.user-statuses :as user-statuses-store]
+            [re-frame.core :as re-frame]
             [status-im.utils.fx :as fx]))
 
 ;; Seen messages
 (fx/defn receive-seen
   [{:keys [db js-obj]} chat-id sender {:keys [message-ids]}]
-  (merge {:transport/confirm-messages-processed [{:web3   (:web3 db)
-                                                  :js-obj js-obj}]}
+  (merge {}
          (when-let [seen-messages-ids (-> (get-in db [:chats chat-id :messages])
                                           (select-keys message-ids)
                                           keys)]
@@ -22,4 +22,6 @@
                                                  status))
                                      db
                                      statuses)
-              :data-store/tx [(user-statuses-store/save-statuses-tx statuses)]}))))
+              :data-store/tx [(user-statuses-store/save-statuses-tx
+                               statuses
+                               #(re-frame/dispatch [:message/message-persisted js-obj]))]}))))
