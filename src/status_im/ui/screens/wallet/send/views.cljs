@@ -1086,8 +1086,8 @@
                            :bottom   0}}
        [tooltip/tooltip (i18n/label :t/wallet-passphrase-reminder)
         {:bottom-value 12
-         :color        colors/blue
-         :text-color   colors/white}]
+         :color        colors/blue-light
+         :text-color   colors/blue}]
        [react/view {:style {:background-color        colors/white
                             :border-top-left-radius  8
                             :border-top-right-radius 8}}
@@ -1303,17 +1303,16 @@
                                   :font-size   15
                                   :text-align  :right}}
               (str "~ "  network-fee-fiat " " (:code fiat-currency))]]]]
-          [static-modal
-           [confirm-and-sign {:transaction     transaction
-                              :contact         contact
-                              :total-amount    total-amount
-                              :gas-amount      gas-amount
-                              :native-currency native-currency
-                              :fiat-currency   fiat-currency
-                              :total-fiat      total-fiat
-                              :all-tokens      all-tokens
-                              :chain           chain
-                              :flow            flow}]]]]))))
+          [confirm-and-sign {:transaction     transaction
+                             :contact         contact
+                             :total-amount    total-amount
+                             :gas-amount      gas-amount
+                             :native-currency native-currency
+                             :fiat-currency   fiat-currency
+                             :total-fiat      total-fiat
+                             :all-tokens      all-tokens
+                             :chain           chain
+                             :flow            flow}]]]))))
 
 (defview txn-overview []
   (letsubs [{:keys [transaction flow contact]} [:get-screen-params :wallet-txn-overview]
