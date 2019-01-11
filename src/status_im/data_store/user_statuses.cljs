@@ -44,4 +44,3 @@
   (fn [realm]
     (doseq [user-status user-statuses]
       ((save-status-tx user-status) realm))))
-
