@@ -40,8 +40,8 @@
 
 (defn save-statuses-tx
   "Returns tx function for saving message user statuses"
-  ([user-statuses]
-   (fn [realm]
-     (doseq [user-status user-statuses]
-       ((save-status-tx user-status) realm)))))
+  [user-statuses]
+  (fn [realm]
+    (doseq [user-status user-statuses]
+      ((save-status-tx user-status) realm))))
 
