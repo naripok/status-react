@@ -38,11 +38,7 @@
            {:title       (i18n/label :t/send-request-amount)
             :description (i18n/label :t/send-request-amount-max-decimals {:asset-decimals 18})}))
     (is (= (protocol/validate personal-send-command {:asset "ETH" :amount "0.01"} cofx)
-           nil)))
-  (testing "Yielding control prefills wallet"
-    (let [fx (protocol/yield-control personal-send-command {:asset "ETH" :amount "0.01"} cofx)]
-      (is (= (get-in fx [:db :wallet :send-transaction :amount-text]) "0.01"))
-      (is (= (get-in fx [:db :wallet :send-transaction :symbol]) :ETH)))))
+           nil))))
 
 ;; testing the `/request` command
 
