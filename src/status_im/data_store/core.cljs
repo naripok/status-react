@@ -46,15 +46,24 @@
    (then
     #(data-source/open-account address password encryption-key))))
 
-(defn- merge-events-of-type [success-events event-type]
-  (let [persistence-event? (fn [event]
-                             (and (vector? event)
-                                  (= (first event) event-type)))
-        unmergeable-events (filter (complement persistence-event?) success-events)
-        mergeable-events (filter persistence-event? success-events)]
-    (into unmergeable-events
-          [[event-type
-            (reduce into (map second mergeable-events))]])))
+(defn merge-events-of-type [success-events event-type]
+  ;; merges data value of events of specified type together
+  ;; keeps the other events intact
+  ;; [[:e1 [:d1]] [:e1 [:d2]]] => [[:e1 [:d1 :d2]]]
+  (let [event-to-merge? (fn [event]
+                          (and (vector? event)
+                               (= (first event) event-type)
+                               (vector? (second event))))
+        unmergeable-events (filter (complement event-to-merge?) success-events)
+        mergeable-events (filter event-to-merge? success-events)]
+    (into []
+          (into unmergeable-events
+                (when-not (empty? mergeable-events)
+                  (let [merged-values (reduce into
+                                              (map second mergeable-events))]
+                    [(into [event-type]
+                           (when merged-values
+                             [merged-values]))]))))))
 
 (defn- merge-persistence-events [success-events]
   (merge-events-of-type success-events :message/message-persisted))
