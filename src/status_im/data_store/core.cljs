@@ -46,14 +46,28 @@
    (then
     #(data-source/open-account address password encryption-key))))
 
+(defn- merge-events-of-type [success-events event-type]
+  (let [persistence-event? (fn [event]
+                             (and (vector? event)
+                                  (= (first event) event-type)))
+        unmergeable-events (filter (complement persistence-event?) success-events)
+        mergeable-events (filter persistence-event? success-events)]
+    (into unmergeable-events
+          [[event-type
+            (reduce into (map second mergeable-events))]])))
+
+(defn- merge-persistence-events [success-events]
+  (merge-events-of-type success-events :message/message-persisted))
+
 (defn- perform-transactions [raw-transactions realm]
   (let [success-events (keep :success-event raw-transactions)
         transactions   (map (fn [{:keys [transaction] :as f}]
                               (or transaction f)) raw-transactions)]
     (data-source/write realm #(doseq [transaction transactions]
                                 (transaction realm)))
-    (doseq [event success-events]
-      (re-frame/dispatch event))))
+    (let [optimized-events (merge-persistence-events success-events)]
+      (doseq [event optimized-events]
+        (re-frame/dispatch event)))))
 
 (re-frame/reg-fx
  :data-store/base-tx

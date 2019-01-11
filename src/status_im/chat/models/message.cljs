@@ -136,9 +136,8 @@
                                      (not= from current-public-key))
                                 (update-in [:chats chat-id :loaded-unviewed-messages-ids]
                                            (fnil conj #{}) message-id))
-               :data-store/tx [(messages-store/save-message-tx
-                                prepared-message
-                                #(re-frame/dispatch [:message/message-persisted raw-message]))]}
+               :data-store/tx [{:transaction (messages-store/save-message-tx prepared-message)
+                                :success-event [:message/message-persisted raw-message]}]}
               (when (and platform/desktop?
                          (not batch?)
                          (not (system-message? prepared-message)))

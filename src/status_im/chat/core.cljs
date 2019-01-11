@@ -21,6 +21,5 @@
                                           status))
                               db
                               statuses)
-       :data-store/tx [(user-statuses-store/save-statuses-tx
-                        statuses
-                        #(re-frame/dispatch [:message/message-persisted js-obj]))]})))
+       :data-store/tx [{:transaction (user-statuses-store/save-statuses-tx statuses)
+                        :success-event [:message/message-persisted js-obj]}]})))
