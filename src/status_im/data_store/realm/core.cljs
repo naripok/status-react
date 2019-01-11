@@ -285,9 +285,6 @@
 
 ;; realm functions
 
-(defn object-stored? [obj]
-  (and (not (nil? obj)) (.isValid obj)))
-
 (defn write [realm f]
   (.write realm f))
 

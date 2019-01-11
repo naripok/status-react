@@ -1,6 +1,5 @@
 (ns status-im.chat.core
   (:require [status-im.data-store.user-statuses :as user-statuses-store]
-            [re-frame.core :as re-frame]
             [status-im.utils.fx :as fx]))
 
 ;; Seen messages
