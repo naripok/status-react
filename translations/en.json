@@ -862,7 +862,7 @@
     "migrations-erase-accounts-data-button": "Erase account's db",
     "account-and-db-password-mismatch-title": "The problem occurred!",
     "account-and-db-password-mismatch-content": "Account's and realm db passwords do not match.",
-    "recover-account-warning": "Your wallet information will be exposed by importing this account."
+    "recover-account-warning": "Your wallet information will be exposed by importing this account.",
     "error-unknown-ens-name": "Unknown ENS name",
     "address-or-ens-placeholder": "0x... or name.eth",
     "wallet-address-tab-title": "Address",

@@ -254,10 +254,7 @@
                                                      [:modal send-transaction-modal]
 
                                                      :wallet-transaction-sent
-                                                     [:modal transaction-sent-modal]
-
-                                                     :wallet-transaction-fee
-                                                     [:modal wallet.transaction-fee/transaction-fee]})
+                                                     [:modal transaction-sent-modal]})
                                      {:headerMode       "none"
                                       :initialRouteName "wallet-send-transaction-modal"})}
 
@@ -270,10 +267,7 @@
                                                      [:modal send-transaction-modal]
 
                                                      :wallet-transaction-sent
-                                                     [:modal transaction-sent-modal]
-
-                                                     :wallet-transaction-fee
-                                                     [:modal wallet.transaction-fee/transaction-fee]})
+                                                     [:modal transaction-sent-modal]})
                                      {:headerMode       "none"
                                       :initialRouteName "wallet-send-modal-stack-with-onboarding"})}
 
