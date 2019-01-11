@@ -41,13 +41,7 @@
 (defn save-statuses-tx
   "Returns tx function for saving message user statuses"
   ([user-statuses]
-   (save-statuses-tx user-statuses nil))
-  ([user-statuses on-success]
    (fn [realm]
-     (let [success (reduce *
-                           (map core/object-stored?
-                                (doseq [user-status user-statuses]
-                                  ((save-status-tx user-status) realm))))]
-       (when (and success (not (nil? on-success)))
-         (on-success))
-       success))))
+     (doseq [user-status user-statuses]
+       ((save-status-tx user-status) realm)))))
+

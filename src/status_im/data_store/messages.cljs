@@ -95,17 +95,14 @@
 
 (defn save-message-tx
   "Returns tx function for saving message"
-  ([message]
-   (save-message-tx message nil))
-  ([{:keys [message-id from] :as message} on-success]
-   (fn [realm]
-     (core/create realm
-                  :message
-                  (prepare-message (merge default-values
-                                          message
-                                          {:from (or from "anonymous")}))
-                  true
-                  on-success))))
+  [{:keys [message-id from] :as message}]
+  (fn [realm]
+    (core/create realm
+                 :message
+                 (prepare-message (merge default-values
+                                         message
+                                         {:from (or from "anonymous")}))
+                 true)))
 
 (defn delete-message-tx
   "Returns tx function for deleting message"
