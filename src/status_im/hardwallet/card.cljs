@@ -13,13 +13,15 @@
    :error (.-message object)})
 
 (defn check-nfc-support []
-  (when config/hardwallet-enabled?
+  (when (and config/hardwallet-enabled?
+             platform/android?)
     (.. keycard
         nfcIsSupported
         (then #(re-frame/dispatch [:hardwallet.callback/check-nfc-support-success %])))))
 
 (defn check-nfc-enabled []
-  (when platform/android?
+  (when (and config/hardwallet-enabled?
+             platform/android?)
     (.. keycard
         nfcIsEnabled
         (then #(re-frame/dispatch [:hardwallet.callback/check-nfc-enabled-success %])))))
@@ -53,13 +55,6 @@
       (getApplicationInfo (str pairing))
       (then #(re-frame/dispatch [:hardwallet.callback/on-get-application-info-success %]))
       (catch #(re-frame/dispatch [:hardwallet.callback/on-get-application-info-error (error-object->map %)]))))
-
-(defn start []
-  (when config/hardwallet-enabled?
-    (.. keycard
-        start
-        (then #(log/debug "[hardwallet] module started"))
-        (catch #(log/debug "[hardwallet] module not started " %)))))
 
 (defn install-applet-and-init-card []
   (when config/hardwallet-enabled?

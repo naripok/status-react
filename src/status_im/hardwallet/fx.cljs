@@ -21,10 +21,6 @@
  card/open-nfc-settings)
 
 (re-frame/reg-fx
- :hardwallet/start-module
- card/start)
-
-(re-frame/reg-fx
  :hardwallet/install-applet-and-init-card
  card/install-applet-and-init-card)
 
